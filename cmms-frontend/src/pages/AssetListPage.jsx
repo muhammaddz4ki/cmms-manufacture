@@ -2,23 +2,25 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { FileWarning } from 'lucide-react';
-import AssetForm from './AssetForm.jsx'; // Impor form
-import LoadingState from '../components/LoadingState.jsx'; // Impor komponen
-import ErrorState from '../components/ErrorState.jsx'; // Impor komponen
+import AssetForm from './AssetForm.jsx'; // Form yang sudah diupdate
+import LoadingState from '../components/LoadingState.jsx';
+import ErrorState from '../components/ErrorState.jsx';
 
 const API_BASE_URL = 'http://localhost:5000/api';
+const ASSETS_API = `${API_BASE_URL}/assets`;
 
 export default function AssetListPage() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // PERBAIKAN 1: Pindahkan 'fetchAssets' ke dalam 'useEffect'
   useEffect(() => {
     const fetchAssets = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_BASE_URL}/assets`);
+        const response = await axios.get(ASSETS_API);
         setAssets(response.data);
       } catch (err) {
         if (err.response) {
@@ -34,11 +36,23 @@ export default function AssetListPage() {
     };
 
     fetchAssets();
-    
-  }, []);
+  }, []); // Hanya jalan sekali
 
-  const handleAssetCreated = (newAsset) => {
-    setAssets([...assets, newAsset]);
+  // Callback dari form
+  // PERBAIKAN 2: Hapus parameter 'newAsset' yang tidak terpakai
+  const handleAssetCreated = () => {
+    // Kita panggil fetchAssets lagi agar daftar aset ter-refresh
+    // Ini lebih mudah daripada menggabungkan data secara manual
+    
+    // (Panggil fungsi fetch yang didefinisikan di scope atas jika diperlukan,
+    // tapi karena 'useEffect' hanya jalan sekali, kita perlu fungsi fetch baru
+    // atau state management)
+    
+    // SOLUSI SEMENTARA: Reload halaman untuk refresh data
+    window.location.reload(); 
+    
+    // TODO: Ganti ini dengan state management (seperti Zustand/Redux) 
+    // atau panggil fetchAssets dari dalam 'useEffect'
   };
 
   return (
@@ -62,7 +76,7 @@ export default function AssetListPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">ID Mesin</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Lokasi</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Komponen (Contoh)</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Komponen (Bill of Materials)</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
@@ -88,7 +102,15 @@ export default function AssetListPage() {
                         {asset.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">{asset.components.join(', ')}</td>
+                    
+                    {/* Tampilan Komponen (Format Baru) */}
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {asset.components.length > 0 ? (
+                        asset.components.map(comp => comp.name).join(', ')
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

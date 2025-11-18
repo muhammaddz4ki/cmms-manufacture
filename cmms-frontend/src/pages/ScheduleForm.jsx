@@ -4,12 +4,14 @@ import axios from 'axios';
 import { CalendarPlus, Loader2 } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
+// PERBAIKAN 1: Hapus ASSETS_API karena tidak terpakai di file ini
+const SCHEDULES_API = `${API_BASE_URL}/schedules`;
 
 export default function ScheduleForm({ assets, onScheduleCreated }) {
   // State untuk input form
   const [assetId, setAssetId] = useState('');
-  const [taskName, setTaskName] = useState(''); // <-- Akan menampung input bebas
-  const [component, setComponent] = useState(''); 
+  const [taskName, setTaskName] = useState('');
+  const [component, setComponent] = useState(''); // Gunakan string nama komponen
   const [frequencyDays, setFrequencyDays] = useState(30);
   const [description, setDescription] = useState('');
   
@@ -18,16 +20,16 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
   const [success, setSuccess] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // LOGIKA DROPDOWN DINAMIS (availableComponents)
+  // LOGIKA DINAMIS
   const availableComponents = useMemo(() => {
     if (assetId) {
       const selectedAsset = assets.find(a => a.id === assetId);
-      return selectedAsset?.components || [];
+      // 'components' adalah array objek {id, name, stock_quantity}
+      return selectedAsset?.components || []; 
     }
     return []; 
   }, [assetId, assets]);
   
-  // Efek samping: Reset pilihan komponen jika mesin berubah
   useEffect(() => {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -46,11 +48,8 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // --- PERBAIKAN LOGIKA FINAL TASK NAME ---
-    // finalTaskName akan menjadi: (1) Input manual, ATAU (2) Nama komponen
-    const componentTaskName = component ? `Perawatan: ${component}` : null;
-    const finalTaskName = taskName || componentTaskName; 
-    // ----------------------------------------
+    // Tentukan Nama Tugas Akhir
+    const finalTaskName = taskName || (component ? `Perawatan: ${component}` : '');
     
     if (!assetId || !frequencyDays) {
       setError("Mesin dan Frekuensi wajib diisi.");
@@ -60,7 +59,7 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
       setError("Frekuensi (hari) harus lebih dari 0.");
       return;
     }
-    if (!finalTaskName) { // Validasi jika finalTaskName kosong
+    if (!finalTaskName) { 
       setError("Nama Tugas wajib diisi (isi manual atau pilih komponen).");
       return;
     }
@@ -71,15 +70,15 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
     
     const scheduleData = {
       asset_id: assetId,
-      task_name: finalTaskName, // Kirim nama tugas yang sudah dihitung
-      component: component, 
+      task_name: finalTaskName, 
+      component: component, // Kirim nama komponen (string)
       frequency_days: Number(frequencyDays),
       frequency: `Setiap ${frequencyDays} hari`,
       description_template: description,
     };
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/schedules`, scheduleData);
+      const response = await axios.post(SCHEDULES_API, scheduleData);
       
       onScheduleCreated(response.data); 
       setSuccess(`Jadwal "${response.data.task_name}" berhasil dibuat.`);
@@ -139,19 +138,18 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
               className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50"
             >
               <option value="">-- Pilih Komponen (Opsional) --</option>
-              {availableComponents.map(compName => (
-                <option key={compName} value={compName}>
-                  {compName}
+              {availableComponents.map(comp => (
+                <option key={comp.id} value={comp.name}>
+                  {comp.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Kolom 3: Nama Tugas (TIDAK LAGI DISABLED) */}
+          {/* Kolom 3: Nama Tugas */}
           <div>
             <label htmlFor="taskName" className="block text-sm font-medium text-slate-700 mb-1">
               Nama Tugas
-              {/* Tampilkan bintang jika Komponen TIDAK dipilih DAN Input Kosong */}
               {!component && <span className="text-red-500"> *</span>}
             </label>
             <input
@@ -159,10 +157,10 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
               id="taskName"
               value={taskName}
               onChange={e => setTaskName(e.target.value)}
-              placeholder={component ? `Akan diisi: Perawatan: ${component}` : "Contoh: Pengecekan Rutin"}
-              // --- PERBAIKAN: HAPUS disabled={!!component} ---
-              required={!component} // Wajib jika komponen tidak dipilih
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder={component ? "Otomatis dari Komponen" : "Contoh: Pengecekan Rutin"}
+              disabled={!!component}
+              required={!component}
+              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50"
             />
           </div>
 

@@ -1,7 +1,6 @@
 // src/App.jsx
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-// PERBAIKAN: Impor useAuth dari file hook yang benar
 import { useAuth } from './context/useAuth.js'; 
 
 // Impor halaman
@@ -16,25 +15,24 @@ import CompliancePage from './pages/CompliancePage.jsx';
 import UserPage from './pages/UserPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
+import InventoryPage from './pages/InventoryPage.jsx';
+// --- TAMBAHKAN IMPOR INI ---
+import AssetTemplatePage from './pages/AssetTemplatePage.jsx';
 
-// --- KOMPONEN PROTEKSI RUTE BARU ---
+// Komponen Proteksi Rute
 const ProtectedRoute = ({ children, roles }) => {
     const { user, checkRole } = useAuth();
     
     if (!user) {
-        // Jika user belum login, arahkan ke halaman login
         return <Navigate to="/login" replace />;
     }
     
-    // Cek apakah peran user saat ini diizinkan untuk rute ini
     if (roles && !checkRole(roles)) {
-        // Jika peran tidak diizinkan, arahkan ke Dashboard
         return <Navigate to="/" replace />; 
     }
 
     return children;
 };
-// ------------------------------------
 
 
 export default function App() {
@@ -42,28 +40,32 @@ export default function App() {
   
   return (
     <Routes>
-      {/* Rute Publik: Login dan Registrasi */}
+      {/* Rute Publik */}
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
       
-      {/* Rute Utama (Memerlukan Proteksi) */}
+      {/* Rute Utama (Dilindungi) */}
       <Route path="/" element={<ProtectedRoute roles={['any']}><Layout /></ProtectedRoute>}>
         
-        {/* Rute Dasar (Akses untuk SEMUA role yang login) */}
         <Route index element={<DashboardPage />} />
         <Route path="assets" element={<AssetListPage />} /> 
         <Route path="work-orders" element={<WorkOrderPage />} />
         <Route path="schedules" element={<SchedulePage />} />
         <Route path="history" element={<MaintenanceHistoryPage />} />
         
-        {/* Rute yang Terbatas Aksesnya */}
+        {/* Rute Admin/Manager */}
         <Route path="reports" element={<ProtectedRoute roles={['admin', 'manager']}><ReportPage /></ProtectedRoute>} />
         <Route path="compliance" element={<ProtectedRoute roles={['admin', 'manager']}><CompliancePage /></ProtectedRoute>} />
-        {/* Halaman User Management hanya untuk Admin */}
+        <Route path="inventory" element={<ProtectedRoute roles={['admin', 'manager']}><InventoryPage /></ProtectedRoute>} />
+        
+        {/* --- TAMBAHKAN RUTE INI (Hanya Admin) --- */}
+        <Route path="templates" element={<ProtectedRoute roles={['admin']}><AssetTemplatePage /></ProtectedRoute>} />
+        
+        {/* Rute Admin */}
         <Route path="users" element={<ProtectedRoute roles={['admin']}><UserPage /></ProtectedRoute>} />
       </Route>
       
-      {/* Rute Catch-all (Opsional) */}
+      {/* Rute Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

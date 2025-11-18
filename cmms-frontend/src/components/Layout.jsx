@@ -13,9 +13,10 @@ import {
   ClipboardCheck,
   ShieldCheck,
   Users,
-  LogOut 
+  LogOut,
+  Warehouse,
+  ClipboardCopy // <-- IKON BARU
 } from 'lucide-react';
-// PERBAIKAN: Impor useAuth dari file hook yang benar
 import { useAuth } from '../context/useAuth.js'; 
 
 export default function Layout() {
@@ -28,6 +29,9 @@ export default function Layout() {
     { to: "/assets", icon: HardDrive, label: "Daftar Aset", roles: ['admin', 'manager'] }, 
     { to: "/work-orders", icon: ClipboardList, label: "Work Order", roles: ['any'] },
     { to: "/schedules", icon: CalendarClock, label: "Penjadwalan", roles: ['admin', 'manager'] },
+    { to: "/inventory", icon: Warehouse, label: "Gudang (Inventaris)", roles: ['admin', 'manager'] },
+    // --- TAMBAHKAN LINK INI ---
+    { to: "/templates", icon: ClipboardCopy, label: "Template Aset", roles: ['admin'] },
     { to: "/history", icon: History, label: "Riwayat Perawatan", roles: ['any'] },
     { to: "/reports", icon: ClipboardCheck, label: "Laporan", roles: ['admin', 'manager'] },
     { to: "/compliance", icon: ShieldCheck, label: "Pelacakan Kepatuhan", roles: ['admin', 'manager'] },
@@ -97,7 +101,6 @@ export default function Layout() {
               <span className="font-semibold text-slate-800">{user?.name}</span>
               <span className="text-sm text-blue-600 block">{user?.role.toUpperCase()}</span>
             </div>
-            {/* --- TOMBOL LOGOUT --- */}
             <button
                 onClick={logout}
                 className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors"

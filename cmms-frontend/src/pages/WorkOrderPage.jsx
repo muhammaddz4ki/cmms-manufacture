@@ -1,10 +1,12 @@
 // src/pages/WorkOrderPage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, Play, Check, RefreshCw, Trash2, Edit } from 'lucide-react';
+// PERBAIKAN: Hapus 'RefreshCw' dari impor
+import { FileWarning, Play, Check, Trash2, Edit } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import WorkOrderForm from './WorkOrderForm.jsx';
+import Modal from '../components/Modal.jsx';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -14,9 +16,9 @@ export default function WorkOrderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // State untuk form Edit (DIRENAME DENGAN UNDERSCORE)
-  const [_isEditing, setIsEditing] = useState(false);
-  const [_currentWo, setCurrentWo] = useState(null); // WO yang sedang di-edit
+  // State untuk form Edit
+  const [isEditing, setIsEditing] = useState(false); 
+  const [currentWo, setCurrentWo] = useState(null); 
 
   // Fungsi untuk mengambil data awal (Aset dan Work Order)
   useEffect(() => {
@@ -30,7 +32,7 @@ export default function WorkOrderPage() {
         ]);
         
         setWorkOrders(woResponse.data);
-        setAssets(assetResponse.data);
+        setAssets(assetResponse.data); 
       } catch (err) {
         if (err.response) {
           setError(`Gagal mengambil data: ${err.response.status} ${err.response.statusText}`);
@@ -47,10 +49,25 @@ export default function WorkOrderPage() {
     fetchData();
   }, []);
 
-  // Fungsi ini dipanggil oleh WorkOrderForm saat WO baru berhasil dibuat
+  // Callback dari WorkOrderForm (Mode Create)
   const handleWorkOrderCreated = (newWorkOrder) => {
     setWorkOrders([newWorkOrder, ...workOrders]);
+    // Refresh data aset jika stok berkurang (opsional, tapi bagus)
+    axios.get(`${API_BASE_URL}/assets`).then(res => setAssets(res.data));
   };
+  
+  // Callback dari WorkOrderForm (Mode Edit)
+  const handleWorkOrderUpdated = (updatedWo) => {
+    setWorkOrders(workOrders.map(wo => 
+        wo.id === updatedWo.id ? updatedWo : wo
+    ));
+    handleCloseModal();
+  };
+  
+  const handleCloseModal = () => {
+      setIsEditing(false);
+      setCurrentWo(null);
+  }
   
   // --- FUNGSI HAPUS (DELETE) ---
   const handleDeleteWorkOrder = async (wo_id, title) => {
@@ -61,52 +78,53 @@ export default function WorkOrderPage() {
       try {
           await axios.delete(`${API_BASE_URL}/workorders/${wo_id}`);
           setWorkOrders(workOrders.filter(wo => wo.id !== wo_id));
-
       } catch (err) {
           console.error("Gagal menghapus WO:", err);
           alert("Gagal menghapus Work Order. Cek konsol untuk info.");
       }
   };
-  // ------------------------------------
 
   // --- FUNGSI UPDATE STATUS (PATCH) ---
   const handleUpdateStatus = async (wo_id, newStatus) => {
     const originalWorkOrders = [...workOrders];
     
-    // 1. Update state React secara instan (Optimistic Update)
+    // Optimistic Update
     const updatedWorkOrders = workOrders.map(wo =>
       wo.id === wo_id ? { ...wo, status: newStatus } : wo
     );
     setWorkOrders(updatedWorkOrders);
 
-    // 2. Kirim permintaan ke backend
     try {
       const response = await axios.patch(
         `${API_BASE_URL}/workorders/${wo_id}`, 
         { status: newStatus }
       );
       
-      // 3. Jika berhasil, update state lagi dengan data pasti dari server
-      setWorkOrders(workOrders.map(wo =>
-        wo.id === wo_id ? response.data : wo
-      ));
+      // Update state dengan data pasti dari server (terutama jika 'completed_at' diisi)
+      // Jika status 'completed', WO akan hilang dari daftar ini saat refresh berikutnya
+      // Jadi kita biarkan dia hilang saat refresh, atau kita filter manual
+      if (newStatus === 'completed') {
+        setWorkOrders(workOrders.filter(wo => wo.id !== wo_id));
+        // Refresh data Aset (untuk update stok di dropdown)
+        axios.get(`${API_BASE_URL}/assets`).then(res => setAssets(res.data));
+      } else {
+         setWorkOrders(workOrders.map(wo =>
+            wo.id === wo_id ? response.data : wo
+         ));
+      }
 
     } catch (err) {
       console.error("Gagal update status:", err);
-      // 4. Jika gagal, kembalikan state ke semula
       setWorkOrders(originalWorkOrders);
       alert("Gagal mengupdate status WO. Cek konsol untuk info.");
     }
   };
-  // -------------------------------------
 
-  // --- FUNGSI BARU: EDIT DETAIL ---
+  // --- FUNGSI EDIT DETAIL ---
   const handleEditWorkOrder = (wo) => {
-    setCurrentWo(wo); // Simpan data WO yang akan di-edit
-    setIsEditing(true); // Buka form/modal edit
-    alert("Fungsionalitas Edit akan diimplementasikan menggunakan Modal di langkah selanjutnya.");
+    setCurrentWo(wo); 
+    setIsEditing(true);
   };
-  // -------------------------------------
 
   // Fungsi format tanggal
   const formatDate = (isoString) => {
@@ -127,8 +145,7 @@ export default function WorkOrderPage() {
         return 'bg-red-100 text-red-800';
       case 'in_progress':
         return 'bg-yellow-100 text-yellow-800';
-      case 'completed':
-        return 'bg-green-100 text-green-800';
+      // 'completed' tidak akan muncul di sini lagi
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -138,14 +155,17 @@ export default function WorkOrderPage() {
     <div>
       <h1 className="text-3xl font-bold text-slate-800 mb-6">Manajemen Work Order</h1>
       
-      {/* Tampilkan Form Buat/Edit WO */}
-      <WorkOrderForm 
-        assets={assets} 
-        onWorkOrderCreated={handleWorkOrderCreated} 
-      />
+      {/* Tampilkan Form Buat WO Baru */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 className="text-2xl font-semibold mb-4">Buat Work Order Baru</h2>
+        <WorkOrderForm 
+            assets={assets} 
+            onWorkOrderCreated={handleWorkOrderCreated} 
+        />
+      </div>
 
       {/* Tabel Daftar Work Order */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="bg-white p-6 rounded-lg shadow-md mt-8">
         <h2 className="text-2xl font-semibold mb-4">Daftar Work Order</h2>
         
         {loading && <LoadingState />}
@@ -163,7 +183,6 @@ export default function WorkOrderPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tipe</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Dibuat Tanggal</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tindakan</th>
-                  {/* Tambahkan kolom baru untuk Edit/Hapus */}
                   <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Opsi</th>
                 </tr>
               </thead>
@@ -192,7 +211,7 @@ export default function WorkOrderPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{wo.title}</td>
                     
                     {/* Komponen */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{wo.component || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{wo.component_name || '-'}</td>
                     
                     {/* Nama Aset */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{wo.asset_name}</td>
@@ -223,18 +242,10 @@ export default function WorkOrderPage() {
                           <Check size={18} />
                         </button>
                       )}
-                      {wo.status === 'completed' && (
-                         <button
-                          onClick={() => handleUpdateStatus(wo.id, 'open')}
-                          title="Buka Kembali WO"
-                          className="text-gray-400 hover:text-gray-700"
-                        >
-                          <RefreshCw size={18} />
-                        </button>
-                      )}
+                      {/* Tombol RefreshCw dihapus dari sini */}
                     </td>
                     
-                    {/* Opsi Edit/Hapus (BARU) */}
+                    {/* Opsi Edit/Hapus */}
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
                         <button
                             onClick={() => handleEditWorkOrder(wo)}
@@ -258,6 +269,22 @@ export default function WorkOrderPage() {
           </div>
         )}
       </div>
+      
+      {/* MODAL EDIT */}
+      <Modal 
+          isOpen={isEditing} 
+          onClose={handleCloseModal} 
+          title={`Edit Work Order: ${currentWo?.title}`}
+      >
+          {currentWo && (
+              <WorkOrderForm
+                  assets={assets}
+                  initialData={currentWo} 
+                  onWOUpdated={handleWorkOrderUpdated} 
+                  onClose={handleCloseModal} 
+              />
+          )}
+      </Modal>
     </div>
   );
 }

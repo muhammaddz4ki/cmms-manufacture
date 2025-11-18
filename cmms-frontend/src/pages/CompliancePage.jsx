@@ -1,10 +1,11 @@
 // src/pages/CompliancePage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, CheckCircle } from 'lucide-react'; // Menghapus Shield dan Clock
+// PERBAIKAN 1 & 2: Tambahkan AlertTriangle, hapus CheckCircle
+import { FileWarning, Check, RefreshCw, AlertTriangle, Clock } from 'lucide-react'; 
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
-import ComplianceForm from './ComplianceForm.jsx'; // Impor form
+import ComplianceForm from './ComplianceForm.jsx';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 const LOGS_API = `${API_BASE_URL}/compliance/logs`;
@@ -16,40 +17,65 @@ export default function CompliancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fungsi untuk mengambil data awal (Aset dan Log)
+  // --- PERBAIKAN 3: Pindahkan fetchData ke dalam useEffect ---
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const [logResponse, assetResponse] = await Promise.all([
-          axios.get(LOGS_API),
-          axios.get(ASSETS_API)
-        ]);
-        
-        setLogs(logResponse.data);
-        setAssets(assetResponse.data);
+          const [logResponse, assetResponse] = await Promise.all([
+              axios.get(LOGS_API),
+              axios.get(ASSETS_API)
+          ]);
+          
+          setLogs(logResponse.data);
+          setAssets(assetResponse.data);
       } catch (err) {
-        if (err.response) {
-          setError(`Gagal mengambil data: ${err.response.status} ${err.response.statusText}`);
-        } else if (err.request) {
-          setError("Gagal memuat data. Pastikan server Flask (port 5000) berjalan.");
-        } else {
-          setError(`Error: ${err.message}`);
-        }
-        console.error(err);
+          if (err.response) {
+              setError(`Gagal mengambil data: ${err.response.status} ${err.response.statusText}`);
+          } else if (err.request) {
+              setError("Gagal memuat data. Pastikan server Flask (port 5000) berjalan.");
+          } else {
+              setError(`Error: ${err.message}`);
+          }
+          console.error(err);
       }
       setLoading(false);
     };
 
     fetchData();
   }, []);
+  // --------------------------------------------------------
 
   // Fungsi ini dipanggil oleh ComplianceForm
   const handleLogCreated = (newLog) => {
     setLogs([newLog, ...logs]);
   };
   
+  // FUNGSI UPDATE STATUS
+  const handleUpdateStatus = async (logId, newStatus) => {
+    const originalLogs = [...logs];
+    
+    // Optimistic Update
+    setLogs(logs.map(log =>
+        log.id === logId ? { ...log, status: newStatus } : log
+    ));
+
+    try {
+        await axios.patch(`${LOGS_API}/${logId}`, { status: newStatus });
+        
+        // Final Update: Ambil data baru untuk update completed_at
+        const updatedLogs = await axios.get(LOGS_API);
+        setLogs(updatedLogs.data);
+        
+    } catch (err) {
+        console.error("Gagal update status kepatuhan:", err);
+        // Rollback: Kembalikan state jika gagal
+        setLogs(originalLogs);
+        alert(`Gagal mengubah status. Cek konsol untuk info.`);
+    }
+  };
+
   // Fungsi kecil untuk format tanggal
   const formatDate = (isoString) => {
     if (!isoString) return '-';
@@ -61,21 +87,23 @@ export default function CompliancePage() {
   const getStatusInfo = (status) => {
     switch (status) {
       case 'pending':
-        return { text: 'Pending', class: 'bg-yellow-100 text-yellow-800' };
+        // PERBAIKAN: Gunakan ikon yang benar
+        return { text: 'Pending', class: 'bg-yellow-100 text-yellow-800', icon: Clock }; 
       case 'compliant':
-        return { text: 'Compliant', class: 'bg-green-100 text-green-800' };
+        return { text: 'Compliant', class: 'bg-green-100 text-green-800', icon: Check };
       case 'overdue':
-        return { text: 'Overdue', class: 'bg-red-100 text-red-800' };
+        // PERBAIKAN: Gunakan ikon yang benar
+        return { text: 'Overdue', class: 'bg-red-100 text-red-800', icon: AlertTriangle }; 
       default:
-        return { text: status, class: 'bg-gray-100 text-gray-800' };
+        return { text: status, class: 'bg-gray-100 text-gray-800', icon: AlertTriangle };
     }
   };
 
   if (error) {
     return (
         <div>
-          <h1 className="text-3xl font-bold text-slate-800 mb-6">Pelacakan Kepatuhan</h1>
-          <ErrorState message={error} />
+            <h1 className="text-3xl font-bold text-slate-800 mb-6">Pelacakan Kepatuhan</h1>
+            <ErrorState message={error} />
         </div>
     );
   }
@@ -105,7 +133,7 @@ export default function CompliancePage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Mesin (Aset)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Jatuh Tempo Berikutnya</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Tindakan</th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Tindakan</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
@@ -121,6 +149,7 @@ export default function CompliancePage() {
                 )}
                 {logs.map(log => {
                     const statusInfo = getStatusInfo(log.status);
+                    
                     return (
                         <tr key={log.id} className="hover:bg-slate-50">
                             
@@ -140,11 +169,26 @@ export default function CompliancePage() {
                             {/* Jatuh Tempo Berikutnya */}
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(log.next_check_due)}</td>
                             
-                            {/* Tindakan (Nanti bisa ditambah tombol update status) */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <button title="Tandai Selesai" className="text-blue-500 hover:text-blue-700">
-                                    <CheckCircle size={18} />
-                                </button>
+                            {/* Tindakan (Action Buttons) */}
+                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
+                                {(log.status === 'pending' || log.status === 'overdue') && (
+                                    <button 
+                                        onClick={() => handleUpdateStatus(log.id, 'compliant')}
+                                        title="Tandai Selesai / Compliant" 
+                                        className="text-green-500 hover:text-green-700"
+                                    >
+                                        <Check size={18} />
+                                    </button>
+                                )}
+                                {log.status === 'compliant' && (
+                                    <button 
+                                        onClick={() => handleUpdateStatus(log.id, 'pending')}
+                                        title="Ubah Status ke Pending" 
+                                        className="text-gray-400 hover:text-gray-700"
+                                    >
+                                        <RefreshCw size={18} />
+                                    </button>
+                                )}
                             </td>
                         </tr>
                     );

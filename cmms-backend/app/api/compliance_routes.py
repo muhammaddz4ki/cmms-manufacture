@@ -1,6 +1,6 @@
 # /cmms-backend/app/api/compliance_routes.py
 from flask import Blueprint, request, jsonify
-from app.models import ComplianceLog, Asset # Import model
+from app.models import ComplianceLog, Asset 
 from mongoengine.errors import DoesNotExist
 import datetime
 
@@ -8,11 +8,9 @@ import datetime
 compliance_bp = Blueprint('compliance_bp', __name__)
 
 # --- GET: Mendapatkan SEMUA Log Kepatuhan ---
-# Rute ini akan menjadi /api/compliance/logs
 @compliance_bp.route('/logs', methods=['GET'])
 def get_compliance_logs():
     try:
-        # Urutkan berdasarkan tanggal jatuh tempo, yang terdekat di atas
         logs = ComplianceLog.objects().order_by('next_check_due')
         return jsonify([log.to_json() for log in logs]), 200
     except Exception as e:
@@ -36,8 +34,6 @@ def create_compliance_log():
         # Handle next_check_due date
         next_due = None
         if data.get('next_check_due'):
-            # Asumsi React kirim format ISO string (YYYY-MM-DD)
-            # Kita perlu tambahkan waktu agar valid (misal: tengah malam UTC)
             try:
                 next_due_date_only = datetime.datetime.fromisoformat(data['next_check_due'])
                 next_due = next_due_date_only.replace(tzinfo=datetime.timezone.utc)
@@ -59,3 +55,43 @@ def create_compliance_log():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+# --- GET Compliance Stats ---
+@compliance_bp.route('/stats', methods=['GET'])
+def get_compliance_stats():
+    try:
+        overdue_count = ComplianceLog.objects(status='overdue').count()
+        pending_count = ComplianceLog.objects(status='pending').count()
+        
+        return jsonify({
+            "overdue_count": overdue_count,
+            "pending_count": pending_count
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- RUTE BARU: PATCH (Update Status) Log Kepatuhan ---
+@compliance_bp.route('/logs/<log_id>', methods=['PATCH'])
+def update_compliance_log(log_id):
+    try:
+        data = request.get_json()
+        log = ComplianceLog.objects.get(id=log_id)
+        
+        if 'status' in data:
+            new_status = data['status'].lower()
+            allowed_statuses = ['pending', 'compliant', 'overdue']
+            
+            if new_status not in allowed_statuses:
+                return jsonify({"error": "Status tidak valid."}), 400
+            
+            log.status = new_status
+            log.save()
+            
+            return jsonify(log.to_json()), 200
+        
+        return jsonify({"message": "Tidak ada data yang diupdate"}), 200
+
+    except DoesNotExist:
+        return jsonify({"error": "Log Kepatuhan tidak ditemukan"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

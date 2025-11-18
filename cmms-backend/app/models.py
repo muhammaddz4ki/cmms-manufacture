@@ -1,47 +1,60 @@
 # /cmms-backend/app/models.py
-from . import db, bcrypt # Import bcrypt dari init
+from . import db, bcrypt
 import datetime
 
-# --- Sub-dokumen untuk Komponen ---
-class Component(db.EmbeddedDocument):
-# ... (Kode tetap sama) ...
-    name = db.StringField(required=True)
+# --- Model Inventaris Gudang ---
+class ComponentItem(db.Document):
+    name = db.StringField(required=True, unique=True)
     part_number = db.StringField()
-    last_checked = db.DateTimeField()
+    stock_quantity = db.IntField(default=0)
+    location = db.StringField(default='Gudang Utama')
+
+    def to_json(self):
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "part_number": self.part_number,
+            "stock_quantity": self.stock_quantity,
+            "location": self.location
+        }
 
 # --- Model Utama Aset (Mesin Anda) ---
 class Asset(db.Document):
-# ... (Kode tetap sama) ...
     name = db.StringField(required=True)
     machine_id = db.StringField(unique=True, required=True)
     location = db.StringField()
     status = db.StringField(default='running')
-    
-    components = db.ListField(db.EmbeddedDocumentField(Component))
+    components = db.ListField(db.ReferenceField(ComponentItem))
     maintenance_history = db.ListField(db.ReferenceField('WorkOrder'))
     
     def to_json(self):
+        component_list = []
+        for comp in self.components:
+            if comp: 
+                component_list.append({
+                    "id": str(comp.id),
+                    "name": comp.name,
+                    "stock_quantity": comp.stock_quantity
+                })
         return {
             "id": str(self.id),
             "name": self.name,
             "machine_id": self.machine_id,
             "location": self.location,
             "status": self.status,
-            "components": [c.name for c in self.components]
+            "components": component_list 
         }
 
-# --- Model User (Diperbarui untuk Password) ---
+# --- Model User ---
 class User(db.Document):
     name = db.StringField(required=True)
     email = db.StringField(unique=True, required=True)
-    password = db.StringField(required=True) # <-- FIELD BARU
+    password = db.StringField(required=True) 
     role = db.StringField(default='technician')
 
-    # Fungsi untuk melakukan hashing pada password sebelum disimpan
     def set_password(self, password):
         self.password = bcrypt.generate_password_hash(password).decode('utf-8')
     
-    # Fungsi untuk memverifikasi password
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password, password)
 
@@ -53,15 +66,14 @@ class User(db.Document):
             "role": self.role
         }
 
-# ... (Kode WorkOrder, MaintenanceSchedule, ComplianceLog tetap sama) ...
+# --- Model Work Order ---
 class WorkOrder(db.Document):
-# ...
     title = db.StringField(required=True)
     description = db.StringField()
     status = db.StringField(default='open')
     priority = db.StringField(default='medium')
     type = db.StringField()
-    component = db.StringField()
+    component = db.ReferenceField(ComponentItem) 
     asset = db.ReferenceField(Asset, required=True)
     assigned_to = db.ReferenceField(User)
     created_at = db.DateTimeField(default=datetime.datetime.utcnow)
@@ -72,6 +84,8 @@ class WorkOrder(db.Document):
         user_name = self.assigned_to.name if self.assigned_to else ""
         asset_name = self.asset.name if self.asset else "Aset Tidak Ditemukan"
         asset_id = str(self.asset.id) if self.asset else None
+        component_name = self.component.name if self.component else ""
+        component_id = str(self.component.id) if self.component else None
         
         return {
             "id": str(self.id),
@@ -80,7 +94,8 @@ class WorkOrder(db.Document):
             "status": self.status,
             "priority": self.priority,
             "type": self.type,
-            "component": self.component,
+            "component_id": component_id,
+            "component_name": component_name,
             "asset_id": asset_id,
             "asset_name": asset_name,
             "assigned_to": user_name,
@@ -89,6 +104,7 @@ class WorkOrder(db.Document):
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
 
+# --- Model Maintenance Schedule ---
 class MaintenanceSchedule(db.Document):
     asset = db.ReferenceField(Asset, required=True)
     task_name = db.StringField()
@@ -96,7 +112,7 @@ class MaintenanceSchedule(db.Document):
     frequency_days = db.IntField()
     next_due_date = db.DateTimeField()
     description_template = db.StringField()
-    component = db.StringField()
+    component = db.StringField() 
 
     def to_json(self):
         asset_name = self.asset.name if self.asset else "Aset Tidak Ditemukan"
@@ -112,6 +128,7 @@ class MaintenanceSchedule(db.Document):
             "component": self.component
         }
 
+# --- Model Compliance Log ---
 class ComplianceLog(db.Document):
     asset = db.ReferenceField(Asset, required=True)
     regulation_name = db.StringField()
@@ -129,4 +146,19 @@ class ComplianceLog(db.Document):
             "status": self.status,
             "next_check_due": self.next_check_due.isoformat() if self.next_check_due else None,
             "evidence_document_url": self.evidence_document_url,
+        }
+
+# --- MODEL BARU: TIPE ASET (TEMPLATE) ---
+class AssetTemplate(db.Document):
+    name = db.StringField(required=True, unique=True) # Misal: "Wheel Balancing Machine"
+    # Daftar referensi komponen yang dibutuhkan oleh template ini
+    components = db.ListField(db.ReferenceField(ComponentItem))
+
+    def to_json(self):
+        # Kirim daftar ID komponen
+        component_ids = [str(comp.id) for comp in self.components if comp]
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "component_ids": component_ids
         }

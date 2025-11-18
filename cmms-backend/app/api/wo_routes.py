@@ -1,6 +1,7 @@
 # /cmms-backend/app/api/wo_routes.py
 from flask import Blueprint, request, jsonify, make_response
-from app.models import WorkOrder, Asset, User
+# PERUBAHAN: Impor ComponentItem
+from app.models import WorkOrder, Asset, User, ComponentItem 
 from mongoengine.errors import DoesNotExist
 import datetime
 import csv 
@@ -15,14 +16,12 @@ wo_bp = Blueprint('wo_bp', __name__)
 
 # --- Fungsi Helper untuk mengambil data laporan ---
 def calculate_asset_report_data():
-    """Menghitung data statistik WO per aset."""
     all_wos = WorkOrder.objects().all()
     report_data = {}
     
     for wo in all_wos:
-        # PERBAIKAN: Gunakan try/except untuk melewati WO yang tidak bisa diproses
         try:
-            if not wo.asset: continue # Lewati jika aset hilang
+            if not wo.asset: continue 
             
             asset_id = str(wo.asset.id)
             asset_name = wo.asset.name
@@ -49,7 +48,6 @@ def calculate_asset_report_data():
                 stats["completed"] += 1
         
         except Exception as e:
-            # Jika WO tersebut korup, kita lewati dan lanjutkan
             print(f"Skipping corrupt WO in report calculation: {e}")
             continue
 
@@ -112,6 +110,15 @@ def create_work_order():
             except DoesNotExist:
                 pass 
 
+        # --- PERUBAHAN: Tangani Component ID ---
+        wo_component = None
+        if data.get('component_id'): # Frontend sekarang mengirim 'component_id'
+            try:
+                wo_component = ComponentItem.objects.get(id=data['component_id'])
+            except DoesNotExist:
+                return jsonify({"error": "Komponen tidak ditemukan di gudang"}), 404
+        # ------------------------------------
+
         new_wo = WorkOrder(
             title=data['title'],
             description=data.get('description', ''),
@@ -119,7 +126,7 @@ def create_work_order():
             type=data['type'],
             asset=asset,
             assigned_to=assigned_user,
-            component=data.get('component', '') 
+            component=wo_component # Simpan referensi ke ComponentItem
         )
         
         if data.get('due_date'):
@@ -135,15 +142,17 @@ def create_work_order():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# --- PATCH (Update) Work Order ---
+# --- PATCH (Update) Work Order (Logika Stok Baru) ---
 @wo_bp.route('/workorders/<wo_id>', methods=['PATCH'])
 def update_work_order(wo_id):
     try:
         data = request.get_json()
-        
         wo = WorkOrder.objects.get(id=wo_id)
         
-        # Izinkan update field umum
+        # Simpan status lama
+        old_status = wo.status
+
+        # Update field umum
         if 'title' in data:
             wo.title = data['title']
         if 'description' in data:
@@ -152,29 +161,55 @@ def update_work_order(wo_id):
             wo.type = data['type']
         if 'priority' in data:
             wo.priority = data['priority']
-        if 'component' in data:
-            wo.component = data['component']
+        
+        # Update referensi komponen
+        if 'component_id' in data:
+             if data['component_id']:
+                 wo.component = ComponentItem.objects.get(id=data['component_id'])
+             else:
+                 wo.component = None
         
         if 'status' in data:
+            new_status = data['status']
             allowed_statuses = ['open', 'in_progress', 'completed']
-            if data['status'] not in allowed_statuses:
+            if new_status not in allowed_statuses:
                 return jsonify({"error": "Status tidak valid"}), 400
-                
-            wo.status = data['status']
             
-            if data['status'] == 'completed':
+            wo.status = new_status
+            
+            # --- LOGIKA PENGURANGAN STOK ---
+            # Jika status BARU adalah 'completed' DAN status LAMA BUKAN 'completed'
+            if new_status == 'completed' and old_status != 'completed':
                 wo.completed_at = datetime.datetime.utcnow()
-            elif wo.completed_at: 
-                wo.completed_at = None 
+                
+                # Cek apakah WO ini menggunakan komponen
+                if wo.component:
+                    try:
+                        # Kurangi stok di Gudang (ComponentItem)
+                        comp_item = ComponentItem.objects.get(id=wo.component.id)
+                        if comp_item.stock_quantity > 0:
+                            comp_item.stock_quantity -= 1
+                            comp_item.save()
+                        else:
+                            # Stok sudah 0, tidak bisa dikurangi lagi (hanya logging)
+                            print(f"Peringatan: Stok untuk {comp_item.name} sudah habis.")
+                    except DoesNotExist:
+                        print(f"Peringatan: Komponen {wo.component.id} tidak ditemukan di gudang saat update stok.")
+
+            # Jika status diubah kembali dari 'completed'
+            elif new_status != 'completed' and old_status == 'completed':
+                wo.completed_at = None
+                # NOTE: Kita tidak menambah stok kembali secara otomatis
+                # (Asumsi: komponen yang sudah dipakai tidak bisa dikembalikan ke stok)
+            # ----------------------------------
 
         wo.save()
-        
         return jsonify(wo.to_json()), 200
 
     except DoesNotExist:
         return jsonify({"error": "Work Order tidak ditemukan"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": str(e)}), 500
 
 # --- DELETE (Hapus) Work Order ---
 @wo_bp.route('/workorders/<wo_id>', methods=['DELETE'])
@@ -188,31 +223,25 @@ def delete_work_order(wo_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- GET Laporan Kinerja per Aset (Untuk Tampilan) ---
+# --- Rute Laporan dan Ekspor (tetap sama) ---
 @wo_bp.route('/workorders/report/asset_stats', methods=['GET'])
 def get_asset_report_stats():
     try:
         final_report = calculate_asset_report_data()
         return jsonify(final_report), 200
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# --- Export Laporan ke CSV ---
+        
 @wo_bp.route('/workorders/report/export/csv', methods=['GET'])
 def export_asset_report_csv():
     try:
         report_data = calculate_asset_report_data()
-        
         if not report_data:
             return jsonify({"error": "Tidak ada data untuk diekspor"}), 404
-
         si = StringIO()
         cw = csv.writer(si)
-        
         header = ['Asset_ID', 'Asset_Name', 'Total_WO', 'WO_Open', 'WO_In_Progress', 'WO_Completed']
         cw.writerow(header)
-        
         for row in report_data:
             cw.writerow([
                 row['asset_id'],
@@ -222,38 +251,27 @@ def export_asset_report_csv():
                 row['in_progress'],
                 row['completed']
             ])
-
         response = make_response(si.getvalue())
         response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Kinerja_Aset.csv'
         response.headers['Content-type'] = 'text/csv'
-        
         return response
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
         
-# --- Export Laporan ke PDF ---
 @wo_bp.route('/workorders/report/export/pdf', methods=['GET'])
 def export_asset_report_pdf():
     try:
         report_data = calculate_asset_report_data()
-        
         if not report_data:
             return jsonify({"error": "Tidak ada data untuk diekspor"}), 404
-
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         styles = getSampleStyleSheet()
         story = []
-
         story.append(Paragraph("Laporan Kinerja Work Order Per Aset", styles['Title']))
         story.append(Paragraph(f"Tanggal: {datetime.date.today().strftime('%d %B %Y')}", styles['Normal']))
         story.append(Paragraph("<br/>", styles['Normal']))
-
-        data = [
-            ['Nama Aset', 'Total WO', 'Open', 'In Progress', 'Completed']
-        ]
-        
+        data = [['Nama Aset', 'Total WO', 'Open', 'In Progress', 'Completed']]
         for row in report_data:
             data.append([
                 row['asset_name'],
@@ -262,7 +280,6 @@ def export_asset_report_pdf():
                 row['in_progress'],
                 row['completed']
             ])
-
         table = Table(data)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F3F4F6')), 
@@ -274,18 +291,13 @@ def export_asset_report_pdf():
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
         ]))
-        
         story.append(table)
-        
         doc.build(story)
         pdf_value = buffer.getvalue()
         buffer.close()
-        
         response = make_response(pdf_value)
         response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Kinerja_Aset.pdf'
         response.headers['Content-type'] = 'application/pdf'
-        
         return response
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500

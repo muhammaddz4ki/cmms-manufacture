@@ -1,42 +1,40 @@
 // src/pages/WorkOrderForm.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Plus, Loader2, Save } from 'lucide-react'; // Impor ikon Save
+import { Plus, Loader2, Save } from 'lucide-react'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
-// PERUBAHAN UTAMA: Menerima initialData dan onWOUpdated
 export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData, onWOUpdated, onClose }) {
-  // Tentukan apakah mode Edit atau Create
+  
   const isEditMode = !!initialData;
   
-  // State diinisialisasi berdasarkan initialData atau nilai default
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [assetId, setAssetId] = useState(initialData?.asset_id || ''); 
-  const [component, setComponent] = useState(initialData?.component || ''); 
+  const [componentId, setComponentId] = useState(initialData?.component_id || '');
   const [type, setType] = useState(initialData?.type || 'corrective');
   const [priority, setPriority] = useState(initialData?.priority || 'medium');
   
-  // State untuk UI
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // LOGIKA DROPDOWN DINAMIS (Tidak ada perubahan di sini)
+  // LOGIKA DROPDOWN DINAMIS (Komponen berdasarkan Aset)
   const availableComponents = useMemo(() => {
     if (assetId) {
       const selectedAsset = assets.find(a => a.id === assetId);
-      return selectedAsset?.components || [];
+      return selectedAsset?.components || []; 
     }
     return []; 
   }, [assetId, assets]);
-  
-  // Efek samping: Reset pilihan komponen jika mesin berubah (hanya berlaku di mode Create)
+
+  // Efek samping: Reset pilihan komponen jika mesin berubah (hanya di mode Create)
   useEffect(() => {
     if (!isEditMode) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setComponent('');
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setComponentId('');
     }
   }, [assetId, isEditMode]);
 
@@ -45,7 +43,7 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
     setTitle('');
     setDescription('');
     setAssetId('');
-    setComponent(''); 
+    setComponentId('');
     setType('corrective');
     setPriority('medium');
   };
@@ -53,13 +51,22 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validasi dasar
+    // --- PERBAIKAN LOGIKA JUDUL ---
+    // Judul final adalah input manual (title), ATAU jika kosong, baru gunakan nama komponen
+    let finalTitle = title;
+    if (type === 'corrective' && componentId && !title) { // Hanya jika 'title' kosong
+        const selectedComp = availableComponents.find(c => c.id === componentId);
+        finalTitle = `Perbaikan: ${selectedComp?.name || 'Komponen'}`;
+    }
+    // -----------------------------
+
+    // Validasi
     if (!assetId || !type) {
       setError("Mesin dan Tipe WO wajib diisi.");
       return;
     }
-    if (type === 'corrective' && !component && !title) {
-        setError("Untuk tipe Corrective, pilih Komponen atau isi Judul WO.");
+    if (!finalTitle) { // Validasi jika finalTitle masih kosong
+        setError("Judul WO wajib diisi (atau pilih komponen).");
         return;
     }
 
@@ -67,20 +74,11 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
     setSuccess(null);
     setIsSubmitting(true);
 
-    const finalTitle = type === 'corrective' && component ? `Perbaikan: ${component}` : title;
-
-    if (!finalTitle) {
-         setError("Judul WO wajib diisi (atau pilih komponen).");
-         setIsSubmitting(false);
-         return;
-    }
-
-    // Data yang dikirimkan (Hanya kirim field yang diizinkan untuk di-patch/post)
     const payload = {
       title: finalTitle,
       description: description,
       asset_id: assetId,
-      component: component, 
+      component_id: componentId || null, 
       type: type,
       priority: priority,
     };
@@ -90,15 +88,14 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
       if (isEditMode) {
         // Mode EDIT: Gunakan PATCH
         response = await axios.patch(`${API_BASE_URL}/workorders/${initialData.id}`, payload);
-        onWOUpdated(response.data); // Panggil handler update
-        setSuccess(`Work Order "${response.data.title}" berhasil diupdate.`);
-        onClose(); // Tutup modal setelah update
+        onWOUpdated(response.data); 
+        onClose(); 
       } else {
         // Mode CREATE: Gunakan POST
         response = await axios.post(`${API_BASE_URL}/workorders`, payload);
         onWorkOrderCreated(response.data); 
         setSuccess(`Work Order "${response.data.title}" berhasil dibuat.`);
-        resetForm(); // Reset hanya di mode Create
+        resetForm(); 
       }
 
     } catch (err) {
@@ -113,19 +110,18 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
   };
 
   return (
-    // Header form disesuaikan dengan mode
     <div className={`bg-white ${isEditMode ? '' : 'p-6 rounded-lg shadow-md mb-8'}`}>
       {!isEditMode && (
           <h2 className="text-2xl font-semibold mb-4">Buat Work Order Baru</h2>
       )}
 
       {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
-      {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
+      {success && !isEditMode && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
-          {/* Kolom 1: Pilih Mesin (Aset) - Disabled saat Edit */}
+          {/* Kolom 1: Pilih Mesin (Aset) */}
           <div>
             <label htmlFor="assetSelect" className="block text-sm font-medium text-slate-700 mb-1">
               Pilih Mesin (Aset) <span className="text-red-500">*</span>
@@ -135,7 +131,7 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
               value={assetId}
               onChange={e => setAssetId(e.target.value)} 
               required
-              disabled={isEditMode} // TIDAK BISA MENGUBAH ASET DI MODE EDIT
+              disabled={isEditMode} 
               className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
             >
               <option value="">-- Pilih Mesin --</option>
@@ -164,22 +160,22 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
             </select>
           </div>
           
-          {/* Kolom 3: Pilih Komponen */}
+          {/* Kolom 3: Pilih Komponen (Dinamis) */}
           <div>
             <label htmlFor="componentSelect" className="block text-sm font-medium text-slate-700 mb-1">
               Komponen yang Dirawat
             </label>
             <select
               id="componentSelect"
-              value={component}
-              onChange={e => setComponent(e.target.value)}
-              disabled={!assetId} 
+              value={componentId}
+              onChange={e => setComponentId(e.target.value)}
+              disabled={!assetId || type !== 'corrective'} 
               className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50"
             >
               <option value="">-- Pilih Komponen (Opsional) --</option>
-              {availableComponents.map(compName => (
-                <option key={compName} value={compName}>
-                  {compName}
+              {availableComponents.map(comp => (
+                <option key={comp.id} value={comp.id}>
+                  {comp.name} (Stok: {comp.stock_quantity})
                 </option>
               ))}
             </select>
@@ -207,7 +203,8 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
         <div className="mt-4">
           <label htmlFor="woTitle" className="block text-sm font-medium text-slate-700 mb-1">
             Judul Work Order
-            {type === 'corrective' && !component && (
+            {/* Wajib jika Tipe = Preventive ATAU jika Tipe = Corrective TAPI komponen tidak dipilih */}
+            {(type === 'preventive' || (type === 'corrective' && !componentId)) && (
               <span className="text-red-500"> *</span>
             )}
           </label>
@@ -216,8 +213,10 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
             id="woTitle"
             value={title}
             onChange={e => setTitle(e.target.value)}
-            placeholder="Contoh: Perbaikan sensor vibrasi"
-            required={type !== 'corrective' || !component}
+            // --- PERBAIKAN: Hapus atribut 'disabled' ---
+            placeholder={type === 'corrective' && componentId ? "Opsional: Default dari Komponen" : "Contoh: Pengecekan Rutin"}
+            // Wajib diisi jika Tipe = Preventive, ATAU jika Corrective tapi tidak ada komponen
+            required={type === 'preventive' || (type === 'corrective' && !componentId)}
             className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
