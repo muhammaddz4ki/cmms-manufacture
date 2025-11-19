@@ -1,7 +1,7 @@
 // src/pages/AssetTemplatePage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-// PERBAIKAN 1: Hapus 'Edit' dan 'PackagePlus'
+// PERBAIKAN: Hapus 'Edit' dan 'PackagePlus' yang tidak terpakai
 import { FileWarning, Plus, Loader2, Trash2, ListPlus } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -196,10 +196,6 @@ export default function AssetTemplatePage() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{item.name}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{item.component_ids.length} Komponen</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
-                                            {/* (Tombol Edit belum diimplementasikan di backend, jadi kita disable dulu) */}
-                                            {/* <button className="text-blue-500 hover:text-blue-700 disabled:text-gray-300" title="Edit Template (Coming Soon)" disabled>
-                                                <Edit size={16} />
-                                            </button> */}
                                             <button 
                                                 onClick={() => handleDeleteTemplate(item.id, item.name)}
                                                 className="text-red-500 hover:text-red-700" 

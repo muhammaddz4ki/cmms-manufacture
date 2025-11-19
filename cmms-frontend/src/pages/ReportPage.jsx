@@ -1,14 +1,14 @@
 // src/pages/ReportPage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, FileText, FileDown, Table } from 'lucide-react'; 
+import { FileWarning, FileText, FileDown, BarChart2 } from 'lucide-react'; 
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 const REPORT_STATS_API = `${API_BASE_URL}/workorders/report/asset_stats`;
 const EXPORT_CSV_API = `${API_BASE_URL}/workorders/report/export/csv`; 
-const EXPORT_PDF_API = `${API_BASE_URL}/workorders/report/export/pdf`; // Rute Ekspor PDF
+const EXPORT_PDF_API = `${API_BASE_URL}/workorders/report/export/pdf`; 
 
 export default function ReportPage() {
   const [reportData, setReportData] = useState([]);
@@ -27,7 +27,7 @@ export default function ReportPage() {
         if (err.response) {
           setError(`Gagal mengambil data laporan: ${err.response.status} ${err.response.statusText}`);
         } else if (err.request) {
-          setError("Gagal memuat data. Pastikan server Flask (port 5000) berjalan.");
+          setError("Gagal memuat data. Pastikan server Flask berjalan.");
         } else {
           setError(`Error: ${err.message}`);
         }
@@ -49,11 +49,8 @@ export default function ReportPage() {
     } else {
         return;
     }
-
-    // Gunakan window.open untuk memicu unduhan langsung dari browser
     window.open(url, '_blank');
   };
-  // ---------------------
 
   if (error) {
     return <ErrorState message={error} />;
@@ -61,70 +58,118 @@ export default function ReportPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">Laporan Kinerja Work Order</h1>
-      
-      {/* Tombol Ekspor */}
-      <div className="flex justify-between items-center mb-6 p-4 bg-white rounded-lg shadow-md">
-        <h2 className="text-lg font-semibold text-slate-700 flex items-center gap-2">
-            <Table size={20} /> Statistik WO per Mesin
-        </h2>
-        <div className="space-x-2">
-          {/* Tombol Export CSV */}
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 className="text-3xl font-bold text-slate-800">Laporan Kinerja</h1>
+            <p className="text-slate-500 mt-1">Analisis detail performa work order berdasarkan aset.</p>
+        </div>
+        
+        {/* Tombol Ekspor */}
+        <div className="flex gap-3">
           <button
             onClick={() => handleExport('CSV')}
             disabled={loading || reportData.length === 0}
-            className="inline-flex items-center px-3 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-white border border-slate-300 text-sm font-medium rounded-lg text-slate-700 hover:bg-slate-50 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FileDown size={16} className="mr-2" /> Export CSV
+            <FileDown size={18} className="mr-2 text-green-600" /> Export CSV
           </button>
-          {/* Tombol Export PDF */}
           <button
             onClick={() => handleExport('PDF')}
             disabled={loading || reportData.length === 0}
-            className="inline-flex items-center px-3 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-white border border-slate-300 text-sm font-medium rounded-lg text-slate-700 hover:bg-slate-50 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FileText size={16} className="mr-2" /> Export PDF
+            <FileText size={18} className="mr-2 text-red-600" /> Export PDF
           </button>
         </div>
       </div>
       
-      {/* Tabel Laporan */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-semibold mb-4">Ringkasan WO per Aset</h2>
-        
+      {/* Card Tabel Laporan */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+            <BarChart2 size={20} className="text-blue-600"/>
+            <h2 className="text-lg font-semibold text-slate-800">Statistik Work Order per Mesin</h2>
+        </div>
+
         {loading && <LoadingState />}
         
-        {!loading && reportData.length > 0 && (
+        {!loading && (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200" id="report-table">
-              <thead className="bg-slate-50">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50/50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nama Mesin</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-red-600 uppercase tracking-wider">Open (Aktif)</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-amber-500 uppercase tracking-wider">In Progress</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-green-700 uppercase tracking-wider">Completed</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-900 uppercase tracking-wider">Total WO</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Mesin (Aset)</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Open</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">In Progress</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Completed</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-900 uppercase tracking-wider">Total WO</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Completion Rate</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
-                {reportData.map(item => (
-                  <tr key={item.asset_id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{item.asset_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-center text-red-600">{item.open}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-center text-amber-500">{item.in_progress}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-center text-green-700">{item.completed}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-center text-slate-900">{item.total_wo}</td>
-                  </tr>
-                ))}
+              <tbody className="bg-white divide-y divide-slate-100">
+                {reportData.length === 0 ? (
+                   <tr>
+                     <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                       <div className="flex flex-col items-center gap-3">
+                         <div className="p-3 bg-slate-100 rounded-full">
+                             <FileWarning size={32} className="text-slate-400" />
+                         </div>
+                         <p className="font-medium">Belum ada data Work Order untuk dianalisis.</p>
+                       </div>
+                     </td>
+                   </tr>
+                ) : (
+                    reportData.map(item => {
+                        // Hitung persentase penyelesaian
+                        const completionRate = item.total_wo > 0 
+                            ? Math.round((item.completed / item.total_wo) * 100) 
+                            : 0;
+                        
+                        return (
+                          <tr key={item.asset_id} className="hover:bg-slate-50 transition-colors group">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
+                                    {item.asset_name}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${item.open > 0 ? 'bg-red-100 text-red-700' : 'text-slate-400 bg-slate-100'}`}>
+                                    {item.open}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${item.in_progress > 0 ? 'bg-amber-100 text-amber-700' : 'text-slate-400 bg-slate-100'}`}>
+                                    {item.in_progress}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${item.completed > 0 ? 'bg-green-100 text-green-700' : 'text-slate-400 bg-slate-100'}`}>
+                                    {item.completed}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <span className="text-sm font-bold text-slate-900">{item.total_wo}</span>
+                            </td>
+                            
+                            {/* Kolom Baru: Completion Rate Progress Bar */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center gap-2 justify-center">
+                                    <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className={`h-full rounded-full ${completionRate === 100 ? 'bg-green-500' : 'bg-blue-500'}`} 
+                                            style={{ width: `${completionRate}%` }}
+                                        ></div>
+                                    </div>
+                                    <span className="text-xs font-medium text-slate-600">{completionRate}%</span>
+                                </div>
+                            </td>
+                          </tr>
+                        );
+                    })
+                )}
               </tbody>
             </table>
           </div>
-        )}
-         {!loading && reportData.length === 0 && (
-             <div className="text-center py-10 text-slate-500">
-                 <FileWarning size={40} className="text-slate-400 mx-auto" />
-                 <p className="mt-2">Belum ada data Work Order untuk dianalisis.</p>
-             </div>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
+// src/pages/UserPage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, Plus, Loader2, UserPlus, Mail, User, Trash2, Edit } from 'lucide-react'; 
+import { FileWarning, Plus, Loader2, UserPlus, Mail, Shield, User, Trash2, Edit, Lock } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import Modal from '../components/Modal.jsx'; 
@@ -13,27 +14,18 @@ const ROLES = ['admin', 'manager', 'technician'];
 function UserForm({ onUserCreated, initialData, onUserUpdated, onClose }) {
     const isEditMode = !!initialData;
 
-    // State diinisialisasi dari initialData atau kosong
     const [name, setName] = useState(initialData?.name || '');
     const [email, setEmail] = useState(initialData?.email || '');
     const [password, setPassword] = useState(''); 
     const [role, setRole] = useState(initialData?.role || ROLES[2]); 
     
     const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(null);
+    // PERBAIKAN: Hapus state 'success' karena modal langsung ditutup
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const resetForm = () => {
-        setName('');
-        setEmail('');
-        setPassword('');
-        setRole(ROLES[2]);
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
-        setSuccess(null);
         setIsSubmitting(true);
 
         const isPasswordRequired = !isEditMode; 
@@ -43,23 +35,21 @@ function UserForm({ onUserCreated, initialData, onUserUpdated, onClose }) {
             return;
         }
         
-        // Payload hanya berisi field yang bisa di-update/create
         let userData = { name, email, role };
-        if (password) userData.password = password; // Tambahkan password jika diisi
+        if (password) userData.password = password; 
 
         try {
             let response;
             if (isEditMode) {
                 // PATCH (Update Role/Name/Password)
                 response = await axios.patch(`${USERS_API}/${initialData.id}`, userData);
-                onUserUpdated(response.data); // Update state di parent
-                onClose(); // Tutup modal
+                onUserUpdated(response.data); 
+                onClose(); 
             } else {
                 // POST (Create New User)
                 response = await axios.post(USERS_API, userData);
                 onUserCreated(response.data);
-                setSuccess(`Pengguna "${response.data.name}" berhasil dibuat dengan role: ${response.data.role}.`);
-                resetForm();
+                onClose(); // Tutup modal setelah create
             }
         } catch (err) {
             if (err.response && err.response.data && err.response.data.error) {
@@ -73,61 +63,63 @@ function UserForm({ onUserCreated, initialData, onUserUpdated, onClose }) {
     };
 
     return (
-        <div className={isEditMode ? '' : 'bg-white p-6 rounded-lg shadow-md mb-8'}>
-            {!isEditMode && (
-                <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2 text-blue-600">
-                    <UserPlus size={24} /> Tambah Pengguna Baru
-                </h2>
-            )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
             
-            {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
-            {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    
-                    {/* Nama */}
-                    <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
-                        <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} required className="w-full px-3 py-2 border border-slate-300 rounded-md" placeholder="Contoh: Budi Santoso"/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Nama */}
+                <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap</label>
+                    <div className="relative">
+                        <User size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                        <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} required className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="Contoh: Budi Santoso"/>
                     </div>
-                    
-                    {/* Email - Disabled saat Edit */}
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                        <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} required={!isEditMode} disabled={isEditMode} className="w-full px-3 py-2 border border-slate-300 rounded-md disabled:bg-slate-100" placeholder="budi@cmms.com"/>
+                </div>
+                
+                {/* Email */}
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                    <div className="relative">
+                        <Mail size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                        <input type="email" id="email" value={email} onChange={e => setEmail(e.target.value)} required={!isEditMode} disabled={isEditMode} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md disabled:bg-slate-100 focus:ring-blue-500 focus:border-blue-500" placeholder="budi@cmms.com"/>
                     </div>
+                </div>
 
-                    {/* Role */}
-                    <div>
-                        <label htmlFor="role" className="block text-sm font-medium text-slate-700 mb-1">Role/Peran</label>
-                        <select id="role" value={role} onChange={e => setRole(e.target.value)} required className="w-full px-3 py-2 border border-slate-300 rounded-md">
+                {/* Role */}
+                <div>
+                    <label htmlFor="role" className="block text-sm font-medium text-slate-700 mb-1">Role/Peran</label>
+                    <div className="relative">
+                        <Shield size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                        <select id="role" value={role} onChange={e => setRole(e.target.value)} required className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
                             {ROLES.map(r => (
                                 <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
                             ))}
                         </select>
                     </div>
+                </div>
 
-                    {/* Password - Hanya saat Create / Opsional saat Edit */}
-                    <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
-                            Password {isEditMode ? '(Opsional, Ganti)' : '*'}
-                        </label>
-                        <input type="password" id="password" value={password} onChange={e => setPassword(e.target.value)} required={!isEditMode} className="w-full px-3 py-2 border border-slate-300 rounded-md" placeholder={isEditMode ? 'Biarkan kosong jika tidak ingin ganti' : 'Password wajib'}/>
+                {/* Password */}
+                <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">
+                        Password {isEditMode ? '(Opsional)' : '*'}
+                    </label>
+                    <div className="relative">
+                        <Lock size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                        <input type="password" id="password" value={password} onChange={e => setPassword(e.target.value)} required={!isEditMode} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder={isEditMode ? 'Biarkan kosong' : 'Minimal 6 karakter'}/>
                     </div>
                 </div>
+            </div>
 
-                <div className="text-right pt-2">
-                    <button type="submit" disabled={isSubmitting} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
-                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                        {isSubmitting ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : 'Simpan Pengguna'}
-                    </button>
-                </div>
-            </form>
-        </div>
+            <div className="text-right pt-4 flex justify-end gap-3">
+                <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition-colors">Batal</button>
+                <button type="submit" disabled={isSubmitting} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-all transform hover:-translate-y-0.5">
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? <Edit className="mr-2 h-4 w-4"/> : <Plus className="mr-2 h-4 w-4" />)}
+                    {isSubmitting ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : 'Tambah Pengguna'}
+                </button>
+            </div>
+        </form>
     );
 }
-
 
 // --- Halaman Utama UserPage ---
 export default function UserPage() {
@@ -135,9 +127,9 @@ export default function UserPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     
-    // State untuk Edit
-    const [isEditing, setIsEditing] = useState(false);
-    const [currentUser, setCurrentUser] = useState(null);
+    // State untuk Modal Create/Edit
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -156,36 +148,35 @@ export default function UserPage() {
             }
             setLoading(false);
         };
-
         fetchUsers();
-    }, []); // Dependency array kosong: dijalankan sekali saat komponen mounting
+    }, []);
 
     const handleUserCreated = (newUser) => {
-        // Tambahkan pengguna baru di awal array
-        setUsers([newUser, ...users]); 
+        setUsers([newUser, ...users]);
+        setIsModalOpen(false);
     };
 
-    // Callback setelah PATCH berhasil
     const handleUserUpdated = (updatedUser) => {
-        // Ganti objek pengguna lama dengan objek yang baru
         setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
-        setIsEditing(false); // Tutup modal setelah update
-        setCurrentUser(null);
+        setIsModalOpen(false);
+        setEditingUser(null);
     };
     
-    // Fungsi Edit
-    const handleEditUser = (user) => {
-        setCurrentUser(user);
-        setIsEditing(true);
+    const openCreateModal = () => {
+        setEditingUser(null);
+        setIsModalOpen(true);
     };
 
-    // Fungsi Delete
+    const openEditModal = (user) => {
+        setEditingUser(user);
+        setIsModalOpen(true);
+    };
+
     const handleDeleteUser = async (userId, userName) => {
         if (!window.confirm(`Yakin hapus pengguna "${userName}"?`)) return;
 
         try {
             await axios.delete(`${USERS_API}/${userId}`);
-            // Hapus pengguna dari state
             setUsers(users.filter(u => u.id !== userId));
         } catch (err) {
             alert(`Gagal menghapus ${userName}. Cek konsol.`);
@@ -197,12 +188,13 @@ export default function UserPage() {
     const getRoleClass = (role) => {
         switch (role) {
             case 'admin':
-                return 'bg-red-100 text-red-800 font-bold';
+                return 'bg-red-100 text-red-800 border-red-200';
             case 'manager':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-blue-100 text-blue-800 border-blue-200';
             case 'technician':
-            default: // Default ke technician jika tidak ada role atau role tidak dikenal
-                return 'bg-green-100 text-green-800';
+                return 'bg-green-100 text-green-800 border-green-200';
+            default:
+                return 'bg-gray-100 text-gray-800';
         }
     };
 
@@ -212,15 +204,22 @@ export default function UserPage() {
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">Manajemen Pengguna</h1>
-            
-            {/* Form Create */}
-            <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-                <UserForm onUserCreated={handleUserCreated} />
+            {/* Header & Action */}
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-800">Manajemen Pengguna</h1>
+                    <p className="text-slate-500 mt-1">Kelola akses dan peran pengguna sistem.</p>
+                </div>
+                <button
+                    onClick={openCreateModal}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-all transform hover:-translate-y-0.5"
+                >
+                    <UserPlus size={18} className="mr-2" /> Tambah Pengguna
+                </button>
             </div>
             
-            <div className="mt-8 bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-2xl font-semibold mb-4">Daftar Pengguna Saat Ini</h2>
+            {/* Tabel Pengguna */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 
                 {loading && <LoadingState />}
                 
@@ -229,68 +228,66 @@ export default function UserPage() {
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
-                                    {/* Header sudah benar dengan 4 kolom */}
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Nama</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Email</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Peran (Role)</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Opsi</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Nama Lengkap</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Email</th>
+                                    <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Peran (Role)</th>
+                                    <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Opsi</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-slate-200">
                                 {users.length === 0 && (
                                     <tr>
-                                        <td colSpan="4" className="px-6 py-4 text-center text-slate-500">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <FileWarning size={40} className="text-slate-400" />
-                                                <span>Belum ada pengguna terdaftar.</span>
+                                        <td colSpan="4" className="px-6 py-12 text-center text-slate-500">
+                                            <div className="flex flex-col items-center gap-3">
+                                                <div className="p-3 bg-slate-100 rounded-full">
+                                                    <FileWarning size={32} className="text-slate-400" />
+                                                </div>
+                                                <p className="font-medium">Belum ada pengguna terdaftar.</p>
                                             </div>
                                         </td>
                                     </tr>
                                 )}
                                 {users.map(user => (
-                                    <tr key={user.id} className="hover:bg-slate-50">
+                                    <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                         
-                                        {/* PERBAIKAN LAYOUT BODY: Kolom Nama */}
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-medium text-slate-900 flex items-center gap-2">
-                                                <User size={16} className="text-slate-400" />
-                                                {user.name}
+                                            <div className="flex items-center">
+                                                <div className="flex-shrink-0 h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold border border-slate-200">
+                                                    {user.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="ml-4">
+                                                    <div className="text-sm font-medium text-slate-900">{user.name}</div>
+                                                </div>
                                             </div>
                                         </td>
                                         
-                                        {/* PERBAIKAN LAYOUT BODY: Kolom Email */}
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm text-slate-500 flex items-center gap-2">
-                                                <Mail size={16} className="text-slate-400" />
-                                                {user.email}
-                                            </div>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                            {user.email}
                                         </td>
                                         
-                                        {/* Kolom Role */}
                                         <td className="px-6 py-4 whitespace-nowrap text-center">
-                                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleClass(user.role)}`}>
+                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getRoleClass(user.role)}`}>
                                                 {user.role.toUpperCase()}
                                             </span>
                                         </td>
                                         
-                                        {/* Kolom Opsi */}
-                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
-                                            {/* Tombol Edit Role */}
-                                            <button 
-                                                onClick={() => handleEditUser(user)}
-                                                className="text-blue-500 hover:text-blue-700"
-                                                title="Edit Role & Reset Password"
-                                            >
-                                                <Edit size={16} />
-                                            </button>
-                                            {/* Tombol Hapus */}
-                                            <button 
-                                                onClick={() => handleDeleteUser(user.id, user.name)}
-                                                className="text-red-500 hover:text-red-700"
-                                                title="Hapus Pengguna"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button 
+                                                    onClick={() => openEditModal(user)}
+                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                                    title="Edit Role & Reset Password"
+                                                >
+                                                    <Edit size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteUser(user.id, user.name)}
+                                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                                    title="Hapus Pengguna"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -300,17 +297,18 @@ export default function UserPage() {
                 )}
             </div>
 
-            {/* MODAL EDIT ROLE */}
-            {isEditing && (
+            {/* MODAL CREATE/EDIT */}
+            {isModalOpen && (
                 <Modal 
-                    isOpen={isEditing} 
-                    onClose={() => setIsEditing(false)} 
-                    title={`Edit Pengguna: ${currentUser?.name}`}
+                    isOpen={isModalOpen} 
+                    onClose={() => setIsModalOpen(false)} 
+                    title={editingUser ? `Edit Pengguna: ${editingUser.name}` : "Tambah Pengguna Baru"}
                 >
                     <UserForm
-                        initialData={currentUser}
+                        initialData={editingUser}
+                        onUserCreated={handleUserCreated}
                         onUserUpdated={handleUserUpdated}
-                        onClose={() => setIsEditing(false)}
+                        onClose={() => setIsModalOpen(false)}
                     />
                 </Modal>
             )}

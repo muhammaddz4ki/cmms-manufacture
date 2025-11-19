@@ -1,11 +1,11 @@
 // src/pages/CompliancePage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-// PERBAIKAN 1 & 2: Tambahkan AlertTriangle, hapus CheckCircle
-import { FileWarning, Check, RefreshCw, AlertTriangle, Clock } from 'lucide-react'; 
+import { FileWarning, CheckCircle, Clock, RefreshCw, AlertTriangle, ShieldCheck, Plus, Calendar } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import ComplianceForm from './ComplianceForm.jsx';
+import Modal from '../components/Modal.jsx'; // <-- Impor Modal
 
 const API_BASE_URL = 'http://localhost:5000/api';
 const LOGS_API = `${API_BASE_URL}/compliance/logs`;
@@ -16,40 +16,42 @@ export default function CompliancePage() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // State untuk Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // --- PERBAIKAN 3: Pindahkan fetchData ke dalam useEffect ---
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+        const [logResponse, assetResponse] = await Promise.all([
+            axios.get(LOGS_API),
+            axios.get(ASSETS_API)
+        ]);
+        
+        setLogs(logResponse.data);
+        setAssets(assetResponse.data);
+    } catch (err) {
+        if (err.response) {
+            setError(`Gagal mengambil data: ${err.response.status} ${err.response.statusText}`);
+        } else if (err.request) {
+            setError("Gagal memuat data. Pastikan server Flask berjalan.");
+        } else {
+            setError(`Error: ${err.message}`);
+        }
+        console.error(err);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-          const [logResponse, assetResponse] = await Promise.all([
-              axios.get(LOGS_API),
-              axios.get(ASSETS_API)
-          ]);
-          
-          setLogs(logResponse.data);
-          setAssets(assetResponse.data);
-      } catch (err) {
-          if (err.response) {
-              setError(`Gagal mengambil data: ${err.response.status} ${err.response.statusText}`);
-          } else if (err.request) {
-              setError("Gagal memuat data. Pastikan server Flask (port 5000) berjalan.");
-          } else {
-              setError(`Error: ${err.message}`);
-          }
-          console.error(err);
-      }
-      setLoading(false);
-    };
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
   }, []);
-  // --------------------------------------------------------
 
-  // Fungsi ini dipanggil oleh ComplianceForm
   const handleLogCreated = (newLog) => {
     setLogs([newLog, ...logs]);
+    setIsModalOpen(false); // Tutup modal
   };
   
   // FUNGSI UPDATE STATUS
@@ -63,65 +65,55 @@ export default function CompliancePage() {
 
     try {
         await axios.patch(`${LOGS_API}/${logId}`, { status: newStatus });
-        
-        // Final Update: Ambil data baru untuk update completed_at
         const updatedLogs = await axios.get(LOGS_API);
         setLogs(updatedLogs.data);
-        
     } catch (err) {
         console.error("Gagal update status kepatuhan:", err);
-        // Rollback: Kembalikan state jika gagal
         setLogs(originalLogs);
         alert(`Gagal mengubah status. Cek konsol untuk info.`);
     }
   };
 
-  // Fungsi kecil untuk format tanggal
   const formatDate = (isoString) => {
     if (!isoString) return '-';
-    // Hanya tanggal (YYYY-MM-DD)
-    return new Date(isoString).toISOString().split('T')[0]; 
+    return new Date(isoString).toLocaleDateString('id-ID', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
   };
   
-  // Fungsi untuk style status
   const getStatusInfo = (status) => {
     switch (status) {
       case 'pending':
-        // PERBAIKAN: Gunakan ikon yang benar
-        return { text: 'Pending', class: 'bg-yellow-100 text-yellow-800', icon: Clock }; 
+        return { text: 'Pending', class: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock };
       case 'compliant':
-        return { text: 'Compliant', class: 'bg-green-100 text-green-800', icon: Check };
+        return { text: 'Compliant', class: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle };
       case 'overdue':
-        // PERBAIKAN: Gunakan ikon yang benar
-        return { text: 'Overdue', class: 'bg-red-100 text-red-800', icon: AlertTriangle }; 
+        return { text: 'Overdue', class: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle };
       default:
-        return { text: status, class: 'bg-gray-100 text-gray-800', icon: AlertTriangle };
+        return { text: status, class: 'bg-gray-100 text-gray-700 border-gray-200', icon: AlertTriangle };
     }
   };
 
-  if (error) {
-    return (
-        <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">Pelacakan Kepatuhan</h1>
-            <ErrorState message={error} />
-        </div>
-    );
-  }
+  if (error) return <ErrorState message={error} />;
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">Pelacakan Kepatuhan</h1>
-      
-      {/* Render Form */}
-      <ComplianceForm 
-        assets={assets} 
-        onLogCreated={handleLogCreated} 
-      />
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+            <h1 className="text-3xl font-bold text-slate-800">Pelacakan Kepatuhan</h1>
+            <p className="text-slate-500 mt-1">Monitor status kalibrasi dan regulasi aset.</p>
+        </div>
+        <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg shadow-md hover:bg-blue-700 transition-all transform hover:-translate-y-0.5"
+        >
+            <Plus size={18} className="mr-2" /> Catat Log Baru
+        </button>
+      </div>
 
       {/* Tabel Daftar Log */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-semibold mb-4">Daftar Log Kepatuhan</h2>
-        
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {loading && <LoadingState />}
         
         {!loading && (
@@ -129,66 +121,77 @@ export default function CompliancePage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Regulasi</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Mesin (Aset)</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Jatuh Tempo Berikutnya</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Tindakan</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2"><ShieldCheck size={14}/> Regulasi / Standar</div>
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Mesin (Aset)</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-2"><Calendar size={14}/> Jatuh Tempo</div>
+                  </th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Tindakan</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
                 {logs.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-6 py-4 text-center text-slate-500">
-                      <div className="flex flex-col items-center gap-2">
-                        <FileWarning size={40} className="text-slate-400" />
-                        <span>Belum ada log kepatuhan yang dicatat.</span>
+                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="p-3 bg-slate-100 rounded-full">
+                            <FileWarning size={32} className="text-slate-400" />
+                        </div>
+                        <p className="font-medium">Belum ada log kepatuhan.</p>
+                        <p className="text-sm">Catat log baru untuk memulai pelacakan.</p>
                       </div>
                     </td>
                   </tr>
                 )}
                 {logs.map(log => {
                     const statusInfo = getStatusInfo(log.status);
-                    
+                    const IconComponent = statusInfo.icon;
                     return (
-                        <tr key={log.id} className="hover:bg-slate-50">
+                        <tr key={log.id} className="hover:bg-slate-50 transition-colors group">
                             
-                            {/* Regulasi */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{log.regulation_name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">
+                                {log.regulation_name}
+                            </td>
                             
-                            {/* Nama Aset */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{log.asset_name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">
+                                {log.asset_name}
+                            </td>
                             
-                            {/* Status */}
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.class}`}>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusInfo.class}`}>
+                                <IconComponent size={12} className="mr-1.5" />
                                 {statusInfo.text}
                               </span>
                             </td>
                             
-                            {/* Jatuh Tempo Berikutnya */}
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{formatDate(log.next_check_due)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
+                                {formatDate(log.next_check_due)}
+                            </td>
                             
-                            {/* Tindakan (Action Buttons) */}
-                            <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-3">
-                                {(log.status === 'pending' || log.status === 'overdue') && (
-                                    <button 
-                                        onClick={() => handleUpdateStatus(log.id, 'compliant')}
-                                        title="Tandai Selesai / Compliant" 
-                                        className="text-green-500 hover:text-green-700"
-                                    >
-                                        <Check size={18} />
-                                    </button>
-                                )}
-                                {log.status === 'compliant' && (
-                                    <button 
-                                        onClick={() => handleUpdateStatus(log.id, 'pending')}
-                                        title="Ubah Status ke Pending" 
-                                        className="text-gray-400 hover:text-gray-700"
-                                    >
-                                        <RefreshCw size={18} />
-                                    </button>
-                                )}
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {(log.status === 'pending' || log.status === 'overdue') && (
+                                        <button 
+                                            onClick={() => handleUpdateStatus(log.id, 'compliant')}
+                                            title="Tandai Selesai (Compliant)" 
+                                            className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
+                                        >
+                                            <CheckCircle size={18} />
+                                        </button>
+                                    )}
+                                    {log.status === 'compliant' && (
+                                        <button 
+                                            onClick={() => handleUpdateStatus(log.id, 'pending')}
+                                            title="Reset ke Pending" 
+                                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                                        >
+                                            <RefreshCw size={18} />
+                                        </button>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     );
@@ -198,6 +201,21 @@ export default function CompliancePage() {
           </div>
         )}
       </div>
+
+      {/* MODAL CREATE */}
+      {isModalOpen && (
+        <Modal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+            title="Catat Log Kepatuhan Baru"
+        >
+            <ComplianceForm 
+                assets={assets} 
+                onLogCreated={handleLogCreated} 
+                // Tambahkan prop onClose jika ComplianceForm mendukungnya, atau biarkan form menanganinya
+            />
+        </Modal>
+      )}
     </div>
   );
 }

@@ -1,12 +1,11 @@
 // src/pages/WorkOrderForm.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Plus, Loader2, Save } from 'lucide-react'; 
+import { Plus, Loader2, Save, FileText, Settings } from 'lucide-react'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
 
 export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData, onWOUpdated, onClose }) {
-  
   const isEditMode = !!initialData;
   
   const [title, setTitle] = useState(initialData?.title || '');
@@ -20,7 +19,6 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
   const [success, setSuccess] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // LOGIKA DROPDOWN DINAMIS (Komponen berdasarkan Aset)
   const availableComponents = useMemo(() => {
     if (assetId) {
       const selectedAsset = assets.find(a => a.id === assetId);
@@ -29,43 +27,28 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
     return []; 
   }, [assetId, assets]);
 
-  // Efek samping: Reset pilihan komponen jika mesin berubah (hanya di mode Create)
   useEffect(() => {
     if (!isEditMode) {
-
+     
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setComponentId('');
     }
   }, [assetId, isEditMode]);
 
-  // Fungsi reset form
-  const resetForm = () => {
-    setTitle('');
-    setDescription('');
-    setAssetId('');
-    setComponentId('');
-    setType('corrective');
-    setPriority('medium');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // --- PERBAIKAN LOGIKA JUDUL ---
-    // Judul final adalah input manual (title), ATAU jika kosong, baru gunakan nama komponen
     let finalTitle = title;
-    if (type === 'corrective' && componentId && !title) { // Hanya jika 'title' kosong
+    if (type === 'corrective' && componentId && !title) {
         const selectedComp = availableComponents.find(c => c.id === componentId);
         finalTitle = `Perbaikan: ${selectedComp?.name || 'Komponen'}`;
     }
-    // -----------------------------
 
-    // Validasi
     if (!assetId || !type) {
       setError("Mesin dan Tipe WO wajib diisi.");
       return;
     }
-    if (!finalTitle) { // Validasi jika finalTitle masih kosong
+    if (!finalTitle) {
         setError("Judul WO wajib diisi (atau pilih komponen).");
         return;
     }
@@ -86,164 +69,137 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
     try {
       let response;
       if (isEditMode) {
-        // Mode EDIT: Gunakan PATCH
         response = await axios.patch(`${API_BASE_URL}/workorders/${initialData.id}`, payload);
         onWOUpdated(response.data); 
         onClose(); 
       } else {
-        // Mode CREATE: Gunakan POST
         response = await axios.post(`${API_BASE_URL}/workorders`, payload);
         onWorkOrderCreated(response.data); 
-        setSuccess(`Work Order "${response.data.title}" berhasil dibuat.`);
-        resetForm(); 
+        setSuccess(`Work Order berhasil dibuat.`);
+        // Reset form manual (karena kita tidak menutup modal di sini untuk create)
+        setTitle(''); setDescription(''); setAssetId(''); setComponentId(''); setType('corrective'); setPriority('medium');
       }
-
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.error) {
-        setError(err.response.data.error);
-      } else {
-        setError(`Gagal ${isEditMode ? 'mengupdate' : 'membuat'} WO. Cek koneksi server.`);
-      }
-      console.error(err);
+      setError(err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'membuat'} WO.`);
     }
     setIsSubmitting(false);
   };
 
   return (
-    <div className={`bg-white ${isEditMode ? '' : 'p-6 rounded-lg shadow-md mb-8'}`}>
-      {!isEditMode && (
-          <h2 className="text-2xl font-semibold mb-4">Buat Work Order Baru</h2>
-      )}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
+        {success && !isEditMode && <div className="p-3 bg-green-100 text-green-700 rounded-md text-sm">{success}</div>}
 
-      {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
-      {success && !isEditMode && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           
-          {/* Kolom 1: Pilih Mesin (Aset) */}
+          {/* Mesin */}
           <div>
-            <label htmlFor="assetSelect" className="block text-sm font-medium text-slate-700 mb-1">
-              Pilih Mesin (Aset) <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="assetSelect"
-              value={assetId}
-              onChange={e => setAssetId(e.target.value)} 
-              required
-              disabled={isEditMode} 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-            >
-              <option value="">-- Pilih Mesin --</option>
-              {assets.map(asset => (
-                <option key={asset.id} value={asset.id}>
-                  {asset.name} (ID: {asset.machine_id})
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Pilih Mesin (Aset) *</label>
+            <div className="relative">
+                <select
+                value={assetId}
+                onChange={e => setAssetId(e.target.value)} 
+                required
+                disabled={isEditMode} 
+                className="w-full pl-3 pr-10 py-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 transition-shadow"
+                >
+                <option value="">-- Pilih Mesin --</option>
+                {assets.map(asset => (
+                    <option key={asset.id} value={asset.id}>{asset.name} (ID: {asset.machine_id})</option>
+                ))}
+                </select>
+            </div>
           </div>
 
-          {/* Kolom 2: Tipe WO */}
+          {/* Tipe */}
           <div>
-            <label htmlFor="woType" className="block text-sm font-medium text-slate-700 mb-1">
-              Tipe <span className="text-red-500">*</span>
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tipe Pekerjaan *</label>
             <select
-              id="woType"
               value={type}
               onChange={e => setType(e.target.value)}
               required
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow"
             >
               <option value="corrective">Corrective (Perbaikan)</option>
               <option value="preventive">Preventive (Pencegahan)</option>
             </select>
           </div>
           
-          {/* Kolom 3: Pilih Komponen (Dinamis) */}
+          {/* Komponen */}
           <div>
-            <label htmlFor="componentSelect" className="block text-sm font-medium text-slate-700 mb-1">
-              Komponen yang Dirawat
-            </label>
-            <select
-              id="componentSelect"
-              value={componentId}
-              onChange={e => setComponentId(e.target.value)}
-              disabled={!assetId || type !== 'corrective'} 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50"
-            >
-              <option value="">-- Pilih Komponen (Opsional) --</option>
-              {availableComponents.map(comp => (
-                <option key={comp.id} value={comp.id}>
-                  {comp.name} (Stok: {comp.stock_quantity})
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Komponen Terkait</label>
+            <div className="relative">
+                <Settings size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                <select
+                value={componentId}
+                onChange={e => setComponentId(e.target.value)}
+                disabled={!assetId || type !== 'corrective'} 
+                className="w-full pl-9 pr-10 py-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 transition-shadow"
+                >
+                <option value="">-- Opsional --</option>
+                {availableComponents.map(comp => (
+                    <option key={comp.id} value={comp.id}>{comp.name} (Stok: {comp.stock_quantity})</option>
+                ))}
+                </select>
+            </div>
           </div>
 
-           {/* Kolom 4: Prioritas */}
+           {/* Prioritas */}
           <div>
-            <label htmlFor="prioritySelect" className="block text-sm font-medium text-slate-700 mb-1">
-              Prioritas
-            </label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Prioritas</label>
             <select
-              id="prioritySelect"
               value={priority}
               onChange={e => setPriority(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow"
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
+              <option value="low">Low (Rendah)</option>
+              <option value="medium">Medium (Sedang)</option>
+              <option value="high">High (Tinggi - Mendesak)</option>
             </select>
           </div>
         </div>
 
-        {/* Baris 2: Judul WO */}
-        <div className="mt-4">
-          <label htmlFor="woTitle" className="block text-sm font-medium text-slate-700 mb-1">
-            Judul Work Order
-            {/* Wajib jika Tipe = Preventive ATAU jika Tipe = Corrective TAPI komponen tidak dipilih */}
-            {(type === 'preventive' || (type === 'corrective' && !componentId)) && (
-              <span className="text-red-500"> *</span>
-            )}
-          </label>
-          <input
-            type="text"
-            id="woTitle"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            // --- PERBAIKAN: Hapus atribut 'disabled' ---
-            placeholder={type === 'corrective' && componentId ? "Opsional: Default dari Komponen" : "Contoh: Pengecekan Rutin"}
-            // Wajib diisi jika Tipe = Preventive, ATAU jika Corrective tapi tidak ada komponen
-            required={type === 'preventive' || (type === 'corrective' && !componentId)}
-            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-          />
+        {/* Judul */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Judul Work Order *</label>
+          <div className="relative">
+             <FileText size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+             <input
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder={type === 'corrective' && componentId ? "Otomatis: Perbaikan [Komponen]" : "Contoh: Pengecekan Rutin"}
+                required={type === 'preventive' || (type === 'corrective' && !componentId)}
+                className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+             />
+          </div>
         </div>
 
-        {/* Baris 3: Deskripsi */}
+        {/* Deskripsi */}
         <div>
-          <label htmlFor="woDescription" className="block text-sm font-medium text-slate-700 mb-1">
-            Deskripsi (Opsional)
-          </label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Deskripsi Detail (Opsional)</label>
           <textarea
-            id="woDescription"
             value={description}
             onChange={e => setDescription(e.target.value)}
             rows={3}
-            placeholder="Jelaskan masalah atau tugas secara singkat..."
-            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Jelaskan masalah, suara aneh, atau instruksi khusus..."
+            className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow resize-none"
           ></textarea>
         </div>
 
-        {/* Tombol Submit */}
-        <div className="text-right pt-4">
+        {/* Footer Buttons */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+          {isEditMode && (
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">
+                  Batal
+              </button>
+          )}
           <button 
             type="submit" 
             disabled={isSubmitting}
-            className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white ${
+            className={`inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-bold rounded-lg shadow-md text-white ${
                 isEditMode ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'
-            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50`}
+            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all transform hover:-translate-y-0.5`}
           >
             {isSubmitting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -252,10 +208,9 @@ export default function WorkOrderForm({ assets, onWorkOrderCreated, initialData,
             ) : (
               <Plus className="mr-2 h-4 w-4" />
             )}
-            {isSubmitting ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : 'Simpan Work Order'}
+            {isSubmitting ? 'Memproses...' : isEditMode ? 'Simpan Perubahan' : 'Simpan Work Order'}
           </button>
         </div>
       </form>
-    </div>
   );
 }

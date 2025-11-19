@@ -1,7 +1,8 @@
 // src/pages/AssetForm.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Loader2 } from 'lucide-react';
+// PERBAIKAN: Hapus 'Save'
+import { Plus, Loader2, Box, Hash, MapPin, List } from 'lucide-react'; 
 import LoadingState from '../components/LoadingState.jsx'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -10,25 +11,22 @@ const ASSETS_API = `${API_BASE_URL}/assets`;
 const TEMPLATES_API = `${API_BASE_URL}/templates`;
 
 export default function AssetForm({ onAssetCreated }) {
-  // State untuk form input dasar
+  // State
   const [name, setName] = useState("");
   const [machineId, setMachineId] = useState("");
   const [location, setLocation] = useState("");
   
-  // State untuk komponen & template
   const [allComponents, setAllComponents] = useState([]); 
   const [allTemplates, setAllTemplates] = useState([]); 
   const [selectedTemplateId, setSelectedTemplateId] = useState(""); 
   const [selectedComponentIds, setSelectedComponentIds] = useState(new Set()); 
   
   const [loading, setLoading] = useState(true); 
-
-  // State untuk UI
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Ambil SEMUA data awal (Komponen & Template)
+  // Fetch Data
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
@@ -41,45 +39,34 @@ export default function AssetForm({ onAssetCreated }) {
         setAllComponents(compRes.data);
         setAllTemplates(templateRes.data);
       } catch (err) {
-        console.error("Gagal mengambil data awal", err);
-        setError("Gagal memuat data komponen/template dari server.");
+        console.error(err);
+        setError("Gagal memuat data server.");
       }
       setLoading(false);
     };
     fetchInitialData();
-  }, []); // Hanya jalan sekali
+  }, []);
 
-  // --- LOGIKA BARU: Efek saat Template diubah ---
+  // Template Logic
   useEffect(() => {
-    // PERBAIKAN: Nonaktifkan peringatan ESLint untuk blok ini
-
+    // PERBAIKAN: Hapus komentar eslint-disable karena tidak diperlukan lagi
     if (selectedTemplateId === "") {
-      // Jika "Pilih Manual"
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedComponentIds(new Set()); // Kosongkan centang
+      setSelectedComponentIds(new Set()); 
     } else {
-      // Jika Template dipilih
       const template = allTemplates.find(t => t.id === selectedTemplateId);
       if (template) {
-        // Set centang berdasarkan 'component_ids' dari resep
         setSelectedComponentIds(new Set(template.component_ids));
       }
     }
-  }, [selectedTemplateId, allTemplates]); // Dependensi ini sudah benar
-  // ------------------------------------------
+  }, [selectedTemplateId, allTemplates]);
 
-  // Handler untuk checkbox (masih memperbolehkan perubahan manual)
   const handleComponentChange = (componentId) => {
-    // Otomatis set ke mode manual jika user mengubah centang
     setSelectedTemplateId(""); 
-    
     setSelectedComponentIds(prevIds => {
       const newIds = new Set(prevIds);
-      if (newIds.has(componentId)) {
-        newIds.delete(componentId);
-      } else {
-        newIds.add(componentId);
-      }
+      if (newIds.has(componentId)) newIds.delete(componentId);
+      else newIds.add(componentId);
       return newIds;
     });
   };
@@ -111,126 +98,104 @@ export default function AssetForm({ onAssetCreated }) {
       setSuccess(`Aset "${response.data.name}" berhasil disimpan.`);
       resetForm();
     } catch (err) {
-      if (err.response && err.response.data && err.response.data.error) {
-        setError(err.response.data.error);
-      } else {
-        setError("Gagal menyimpan aset. Cek koneksi server.");
-      }
-      console.error(err);
+      setError(err.response?.data?.error || "Gagal menyimpan aset.");
     }
     setIsSubmitting(false);
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-semibold mb-4">Tambah Aset Baru</h2>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
+      {success && <div className="p-3 bg-green-100 text-green-700 rounded-md text-sm">{success}</div>}
       
-      {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
-      {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
-        
-        {/* Input Aset Dasar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label htmlFor="assetName" className="block text-sm font-medium text-slate-700 mb-1">Nama Mesin *</label>
-            <input 
-              type="text" 
-              id="assetName"
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              placeholder="Contoh: Press Stamping 400 Ton"
-              required 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="machineId" className="block text-sm font-medium text-slate-700 mb-1">ID Mesin (Unik) *</label>
-            <input 
-              type="text" 
-              id="machineId"
-              value={machineId} 
-              onChange={e => setMachineId(e.target.value)} 
-              placeholder="Contoh: PST-001"
-              required 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm"
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-slate-700 mb-1">Lokasi</label>
-            <input 
-              type="text" 
-              id="location"
-              value={location} 
-              onChange={e => setLocation(e.target.value)} 
-              placeholder="Contoh: Area Stamping"
-              className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm"
-            />
-          </div>
+      {/* Template Select */}
+      <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+        <label htmlFor="templateSelect" className="block text-sm font-bold text-blue-800 mb-1">
+            Cara Cepat: Pilih Tipe Aset (Template)
+        </label>
+        <div className="relative">
+            <List className="absolute left-3 top-1/2 transform -translate-y-1/2 text-blue-400" size={18} />
+            <select
+                id="templateSelect"
+                value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}
+                disabled={loading}
+                className="w-full pl-10 pr-3 py-2 border border-blue-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm bg-white"
+            >
+                <option value="">-- Pilih Manual / Kosong --</option>
+                {allTemplates.map(template => (
+                <option key={template.id} value={template.id}>
+                    {template.name} ({template.component_ids.length} komponen)
+                </option>
+                ))}
+            </select>
         </div>
-        
-        {/* --- DROPDOWN TEMPLATE BARU --- */}
-        <div className="border-t pt-4">
-          <label htmlFor="templateSelect" className="block text-sm font-medium text-slate-700 mb-1">
-            Pilih Tipe Aset (Template)
-          </label>
-          <select
-            id="templateSelect"
-            value={selectedTemplateId}
-            onChange={e => setSelectedTemplateId(e.target.value)}
-            disabled={loading}
-            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm"
-          >
-            <option value="">-- Pilih Manual --</option>
-            {allTemplates.map(template => (
-              <option key={template.id} value={template.id}>
-                {template.name} ({template.component_ids.length} komponen)
-              </option>
-            ))}
-          </select>
-        </div>
+      </div>
 
-        {/* Pilihan Komponen (Bill of Materials) */}
+      {/* Input Aset Dasar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Pilih Komponen untuk Aset Ini *</label>
-          {loading ? (
-            <LoadingState />
-          ) : allComponents.length === 0 ? (
-            <p className="text-sm text-slate-500">Data komponen di gudang kosong. Silakan isi data di halaman Gudang.</p>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-2 border rounded-md">
-              {allComponents.map(comp => (
-                <label key={comp.id} className="flex items-center space-x-2 p-2 rounded hover:bg-slate-50">
-                  <input
-                    type="checkbox"
-                    checked={selectedComponentIds.has(comp.id)}
-                    onChange={() => handleComponentChange(comp.id)}
-                    className="h-4 w-4 text-blue-600 border-slate-300 rounded"
-                  />
-                  <span className="text-sm text-slate-700">{comp.name}</span>
-                </label>
-              ))}
-            </div>
-          )}
+          <label className="block text-sm font-medium text-slate-700 mb-1">Nama Mesin *</label>
+          <div className="relative">
+             <Box size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+             <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Press Stamping 400 Ton" required className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors"/>
+          </div>
         </div>
         
-        <div className="text-right pt-2">
-          <button 
-            type="submit" 
-            disabled={isSubmitting || loading}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Plus className="mr-2 h-4 w-4" />
-            )}
-            {isSubmitting ? 'Menyimpan...' : 'Simpan Aset'}
-          </button>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">ID Mesin (Unik) *</label>
+           <div className="relative">
+             <Hash size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+             <input type="text" value={machineId} onChange={e => setMachineId(e.target.value)} placeholder="PST-001" required className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors"/>
+          </div>
         </div>
-      </form>
-    </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Lokasi</label>
+           <div className="relative">
+             <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+             <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Area Stamping" className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors"/>
+          </div>
+        </div>
+      </div>
+      
+      {/* Pilihan Komponen */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Komponen Terpasang (Bill of Materials) *</label>
+        {loading ? (
+          <LoadingState />
+        ) : allComponents.length === 0 ? (
+          <p className="text-sm text-slate-500 italic">Data komponen kosong.</p>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-60 overflow-y-auto p-3 border border-slate-200 rounded-lg bg-slate-50">
+            {allComponents.map(comp => (
+              <label key={comp.id} className="flex items-start space-x-2 p-2 rounded hover:bg-white hover:shadow-sm transition-all cursor-pointer border border-transparent hover:border-slate-200">
+                <input
+                  type="checkbox"
+                  checked={selectedComponentIds.has(comp.id)}
+                  onChange={() => handleComponentChange(comp.id)}
+                  className="mt-1 h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <div className="text-xs">
+                    <span className="font-medium text-slate-700 block">{comp.name}</span>
+                    <span className="text-slate-400 text-[10px]">Stok: {comp.stock_quantity}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+      
+      <div className="text-right pt-2">
+        <button 
+          type="submit" 
+          disabled={isSubmitting || loading}
+          className="inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-transform hover:-translate-y-0.5"
+        >
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          Simpan Aset
+        </button>
+      </div>
+    </form>
   );
 }
