@@ -6,7 +6,7 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 
-**Sistem manajemen pemeliharaan berbasis web tingkat lanjut** yang dirancang khusus untuk lingkungan manufaktur. Aplikasi ini tidak hanya melacak aset, tetapi juga menerapkan alur kerja (workflow) pemeliharaan yang ketat mulai dari pengajuan, pengerjaan, hingga verifikasi akhir dengan bukti digital.
+**Sistem manajemen pemeliharaan berbasis web tingkat lanjut** yang dirancang khusus untuk lingkungan manufaktur. Aplikasi ini mengintegrasikan pelacakan aset, manajemen inventaris, dan alur kerja (workflow) pemeliharaan yang ketat—mulai dari pengajuan, pengerjaan, hingga verifikasi akhir dengan bukti digital.
 
 ---
 
@@ -16,7 +16,7 @@ Sistem ini dibangun dengan logika bisnis yang komprehensif untuk menangani kebut
 
 | Modul | Fungsionalitas & Logika Bisnis |
 | :--- | :--- |
-| **🔐 Auth & RBAC** | Kontrol akses berbasis peran (**Admin**, **Manager**, **Technician**). Teknisi memiliki akses terbatas hanya untuk eksekusi tugas. |
+| **🔐 Authentication & RBAC** | Kontrol akses berbasis peran (**Admin**, **Manager**, **Technician**). Teknisi memiliki akses terbatas hanya untuk eksekusi tugas. |
 | **📋 Work Order (WO)** | Siklus hidup penuh: `Open` → `In Progress` → `Pending Verification` → `Completed`. Mendukung `Pending Approval` untuk WO dari Manager. |
 | **✅ Sistem Verifikasi** | **Validasi Ganda:** Teknisi wajib upload **Foto Bukti Selesai**. Admin/Manager wajib memverifikasi foto sebelum menutup WO. |
 | **📦 Gudang Pintar** | Stok komponen terkoneksi dengan WO. Stok hanya **berkurang otomatis** setelah status WO diverifikasi menjadi *Completed*. |
@@ -52,8 +52,6 @@ Sistem ini menerapkan SOP pemeliharaan standar industri untuk menjamin akuntabil
 * Jika valid, Admin menekan **"Verifikasi Selesai"**.
 * Status menjadi `COMPLETED` dan stok sparepart di gudang **otomatis berkurang**.
 
-![Diagram Alur Kerja](https://via.placeholder.com/800x400?text=Workflow+Visualization+CMMS)
-
 ---
 
 ## 🏗️ Arsitektur Teknologi
@@ -71,20 +69,22 @@ Aplikasi dibangun dengan arsitektur terpisah (*decoupled*) untuk performa dan sk
 
 ## ⚙️ Panduan Instalasi (Local Setup)
 
-Ikuti langkah-langkah berikut untuk menjalankan sistem di komputer lokal Anda.
+Sistem ini menggunakan arsitektur Client-Server yang membutuhkan **dua terminal** berjalan secara bersamaan.
 
 ### Prasyarat
 * [Python 3.8+](https://www.python.org/)
 * [Node.js & npm](https://nodejs.org/)
-* [MongoDB](https://www.mongodb.com/) (Pastikan service berjalan di port default `27017`)
+* [MongoDB](https://www.mongodb.com/) (Pastikan service MongoDB berjalan di port default `27017`)
 
-### 1. Setup Backend (Flask API)
+### 1. Setup Backend (Terminal 1)
+
+Buka terminal pertama, lalu ikuti langkah ini untuk menjalankan server API.
 
 ```bash
 # 1. Masuk ke direktori backend
 cd cmms-backend
 
-# 2. Buat Virtual Environment
+# 2. Buat & Aktifkan Virtual Environment
 # Windows:
 python -m venv venv
 .\venv\Scripts\activate
@@ -93,8 +93,53 @@ source venv/bin/activate
 
 # 3. Instal Dependencies
 pip install -r requirements.txt
-# Atau instal manual jika requirements.txt belum tersedia:
-pip install Flask Flask-Bcrypt reportlab mongoengine flask-cors
 
 # 4. Jalankan Server
 python run.py
+
+✅ Status: Server Backend berjalan di http://127.0.0.1:5000.
+
+⚠️ PENTING: Biarkan terminal ini tetap terbuka. Jangan ditutup selama aplikasi digunakan.
+
+2. Setup Frontend (Terminal 2)
+Buka Terminal Baru (New Terminal). Jangan gunakan terminal yang sedang menjalankan backend.
+
+Bash
+
+# 1. Masuk ke direktori frontend
+cd cmms-frontend
+
+# 2. Instal Node Modules (Hanya perlu dilakukan sekali)
+npm install
+
+# 3. Jalankan Mode Pengembangan
+npm run dev
+✅ Status: Aplikasi Frontend berjalan di http://localhost:5173.
+
+💡 Info: Frontend akan otomatis terhubung ke Backend yang berjalan di Terminal 1.
+
+🔑 Akun Demo (Default Seeder)
+Jika Anda telah melakukan seeding database, gunakan kredensial berikut:
+
+Admin: admin@cmms.com / password123
+
+Manager: manager@cmms.com / password123
+
+Technician: tech@cmms.com / password123
+
+📂 Struktur Direktori
+Plaintext
+
+root/
+├── cmms-backend/       # Server Side Logic (Flask API)
+│   ├── models/         # Skema Database (MongoEngine)
+│   ├── routes/         # Endpoint API
+│   ├── static/         # Penyimpanan file upload (Foto)
+│   └── run.py          # Entry point aplikasi
+│
+└── cmms-frontend/      # Client Side Logic (React)
+    ├── src/
+    │   ├── components/ # UI Components reusable
+    │   ├── pages/      # Halaman utama (Dashboard, WO, dll)
+    │   └── context/    # Auth Context
+    └── package.json
