@@ -1,8 +1,7 @@
 // src/pages/AssetForm.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-// PERBAIKAN: Hapus 'Save'
-import { Plus, Loader2, Box, Hash, MapPin, List } from 'lucide-react'; 
+import { Plus, Loader2, Box, Hash, MapPin, List, Save } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -10,16 +9,27 @@ const INVENTORY_API = `${API_BASE_URL}/inventory/components`;
 const ASSETS_API = `${API_BASE_URL}/assets`;
 const TEMPLATES_API = `${API_BASE_URL}/templates`;
 
-export default function AssetForm({ onAssetCreated }) {
+export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated, onClose }) {
+  const isEditMode = !!initialData;
+
   // State
-  const [name, setName] = useState("");
-  const [machineId, setMachineId] = useState("");
-  const [location, setLocation] = useState("");
+  const [name, setName] = useState(initialData?.name || "");
+  const [machineId, setMachineId] = useState(initialData?.machine_id || "");
+  const [location, setLocation] = useState(initialData?.location || "");
   
   const [allComponents, setAllComponents] = useState([]); 
   const [allTemplates, setAllTemplates] = useState([]); 
   const [selectedTemplateId, setSelectedTemplateId] = useState(""); 
-  const [selectedComponentIds, setSelectedComponentIds] = useState(new Set()); 
+  
+  // Inisialisasi checkbox dari initialData (jika ada)
+  const [selectedComponentIds, setSelectedComponentIds] = useState(() => {
+      if (initialData && initialData.components) {
+          // initialData.components adalah array of objects {id, name, ...}
+          // Kita butuh Set dari ID-nya saja
+          return new Set(initialData.components.map(c => c.id));
+      }
+      return new Set();
+  });
   
   const [loading, setLoading] = useState(true); 
   const [error, setError] = useState(null);
@@ -49,17 +59,18 @@ export default function AssetForm({ onAssetCreated }) {
 
   // Template Logic
   useEffect(() => {
-    // PERBAIKAN: Hapus komentar eslint-disable karena tidak diperlukan lagi
+    
     if (selectedTemplateId === "") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedComponentIds(new Set()); 
+       // Jangan reset jika sedang mode edit dan user belum memilih template baru
+       // eslint-disable-next-line react-hooks/set-state-in-effect
+       if (!isEditMode) setSelectedComponentIds(new Set()); 
     } else {
       const template = allTemplates.find(t => t.id === selectedTemplateId);
       if (template) {
         setSelectedComponentIds(new Set(template.component_ids));
       }
     }
-  }, [selectedTemplateId, allTemplates]);
+  }, [selectedTemplateId, allTemplates, isEditMode]);
 
   const handleComponentChange = (componentId) => {
     setSelectedTemplateId(""); 
@@ -69,14 +80,6 @@ export default function AssetForm({ onAssetCreated }) {
       else newIds.add(componentId);
       return newIds;
     });
-  };
-
-  const resetForm = () => {
-    setName("");
-    setMachineId("");
-    setLocation("");
-    setSelectedTemplateId("");
-    setSelectedComponentIds(new Set());
   };
 
   const handleSubmit = async (e) => {
@@ -93,12 +96,22 @@ export default function AssetForm({ onAssetCreated }) {
     };
 
     try {
-      const response = await axios.post(ASSETS_API, assetData);
-      onAssetCreated(response.data); 
-      setSuccess(`Aset "${response.data.name}" berhasil disimpan.`);
-      resetForm();
+      let response;
+      if (isEditMode) {
+        // PATCH
+        response = await axios.patch(`${ASSETS_API}/${initialData.id}`, assetData);
+        onAssetUpdated(response.data);
+        onClose();
+      } else {
+        // POST
+        response = await axios.post(ASSETS_API, assetData);
+        onAssetCreated(response.data); 
+        setSuccess(`Aset "${response.data.name}" berhasil disimpan.`);
+        // Reset form only on create
+        setName(""); setMachineId(""); setLocation(""); setSelectedTemplateId(""); setSelectedComponentIds(new Set());
+      }
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal menyimpan aset.");
+      setError(err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'menyimpan'} aset.`);
     }
     setIsSubmitting(false);
   };
@@ -186,14 +199,23 @@ export default function AssetForm({ onAssetCreated }) {
         )}
       </div>
       
-      <div className="text-right pt-2">
+      <div className="text-right pt-2 flex justify-end gap-3">
+        {isEditMode && (
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Batal</button>
+        )}
         <button 
           type="submit" 
           disabled={isSubmitting || loading}
           className="inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-transform hover:-translate-y-0.5"
         >
-          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-          Simpan Aset
+          {isSubmitting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : isEditMode ? (
+            <Save className="mr-2 h-4 w-4" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
+          {isSubmitting ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : 'Simpan Aset'}
         </button>
       </div>
     </form>

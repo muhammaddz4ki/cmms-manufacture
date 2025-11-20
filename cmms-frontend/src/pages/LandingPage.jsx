@@ -330,9 +330,7 @@ export default function LandingPage() {
              <span className="text-lg font-bold text-slate-200">Maint-Track Pro</span>
           </div>
           
-          <div className="text-sm">
-            &copy; {new Date().getFullYear()} Maint-Track Pro. Dibuat dengan ❤️ oleh Muhammad Dzaki.
-          </div>
+
         </div>
       </footer>
 

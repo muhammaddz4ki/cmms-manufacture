@@ -45,6 +45,40 @@ def create_template():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+# --- PATCH: Mengupdate Template Aset (FITUR BARU) ---
+@template_bp.route('/templates/<template_id>', methods=['PATCH'])
+def update_template(template_id):
+    try:
+        data = request.get_json()
+        template = AssetTemplate.objects.get(id=template_id)
+
+        # Update Nama
+        if 'name' in data:
+            if data['name'] != template.name:
+                # Cek unik manual jika nama berubah
+                if AssetTemplate.objects(name=data['name']).first():
+                    return jsonify({"error": "Nama template ini sudah ada."}), 400
+            template.name = data['name']
+
+        # Update Daftar Komponen
+        if 'component_ids' in data:
+            component_list = []
+            for comp_id in data['component_ids']:
+                try:
+                    comp_item = ComponentItem.objects.get(id=comp_id)
+                    component_list.append(comp_item)
+                except DoesNotExist:
+                    continue # Lewati jika komponen tidak ditemukan (atau return error)
+            template.components = component_list
+
+        template.save()
+        return jsonify(template.to_json()), 200
+
+    except DoesNotExist:
+        return jsonify({"error": "Template tidak ditemukan"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # --- DELETE: Menghapus Template Aset ---
 @template_bp.route('/templates/<template_id>', methods=['DELETE'])
 def delete_template(template_id):

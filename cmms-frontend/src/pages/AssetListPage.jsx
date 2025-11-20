@@ -1,7 +1,7 @@
 // src/pages/AssetListPage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, PackagePlus, HardDrive, MapPin, Activity, Settings } from 'lucide-react';
+import { FileWarning, PackagePlus, HardDrive, MapPin, Activity, Settings, Edit, Trash2 } from 'lucide-react';
 import AssetForm from './AssetForm.jsx'; 
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -17,6 +17,7 @@ export default function AssetListPage() {
   
   // State untuk Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState(null); // State untuk aset yang sedang diedit
 
   const fetchAssets = async () => {
     setLoading(true);
@@ -42,9 +43,42 @@ export default function AssetListPage() {
     fetchAssets();
   }, []); 
 
+  // Handler Create
   const handleAssetCreated = () => {
-    fetchAssets(); // Refresh data
-    setIsModalOpen(false); // Tutup modal
+    fetchAssets(); 
+    setIsModalOpen(false);
+  };
+
+  // Handler Update
+  const handleAssetUpdated = (updatedAsset) => {
+    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    setIsModalOpen(false);
+    setEditingAsset(null);
+  };
+
+  // Handler Delete
+  const handleDeleteAsset = async (assetId, assetName) => {
+      if (!window.confirm(`Apakah Anda yakin ingin menghapus aset "${assetName}"?`)) return;
+
+      try {
+          await axios.delete(`${ASSETS_API}/${assetId}`);
+          setAssets(assets.filter(a => a.id !== assetId));
+      } catch (err) {
+          alert("Gagal menghapus aset. Pastikan tidak ada Work Order yang terhubung.");
+          console.error(err);
+      }
+  };
+
+  // Open Modal Create
+  const openCreateModal = () => {
+      setEditingAsset(null);
+      setIsModalOpen(true);
+  };
+
+  // Open Modal Edit
+  const openEditModal = (asset) => {
+      setEditingAsset(asset);
+      setIsModalOpen(true);
   };
 
   const getStatusClass = (status) => {
@@ -66,7 +100,7 @@ export default function AssetListPage() {
             <p className="text-slate-500 mt-1">Kelola daftar mesin dan spesifikasi komponennya.</p>
         </div>
         <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={openCreateModal}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-all transform hover:-translate-y-0.5"
         >
             <PackagePlus size={18} className="mr-2" /> Tambah Aset Baru
@@ -95,12 +129,13 @@ export default function AssetListPage() {
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-1/3">
                     <div className="flex items-center gap-2"><Settings size={14}/> Komponen (BOM)</div>
                   </th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Opsi</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-200">
                 {assets.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
+                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center gap-3">
                         <div className="p-3 bg-slate-100 rounded-full">
                             <FileWarning size={32} className="text-slate-400" />
@@ -112,7 +147,7 @@ export default function AssetListPage() {
                   </tr>
                 )}
                 {assets.map(asset => (
-                  <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                  <tr key={asset.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-slate-900">{asset.name}</div>
                     </td>
@@ -130,7 +165,7 @@ export default function AssetListPage() {
                       </span>
                     </td>
                     
-                    {/* Tampilan Komponen sebagai Tags */}
+                    {/* Tampilan Komponen */}
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1.5">
                         {asset.components.length > 0 ? (
@@ -144,6 +179,26 @@ export default function AssetListPage() {
                         )}
                       </div>
                     </td>
+
+                    {/* Tombol Aksi (Edit/Hapus) */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                                onClick={() => openEditModal(asset)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                title="Edit Aset"
+                            >
+                                <Edit size={18} />
+                            </button>
+                            <button 
+                                onClick={() => handleDeleteAsset(asset.id, asset.name)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                title="Hapus Aset"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -152,14 +207,19 @@ export default function AssetListPage() {
         )}
       </div>
 
-      {/* Modal Tambah Aset */}
+      {/* Modal Tambah/Edit Aset */}
       {isModalOpen && (
         <Modal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            title="Tambah Aset Baru"
+            title={editingAsset ? `Edit Aset: ${editingAsset.name}` : "Tambah Aset Baru"}
         >
-            <AssetForm onAssetCreated={handleAssetCreated} />
+            <AssetForm 
+                initialData={editingAsset}
+                onAssetCreated={handleAssetCreated}
+                onAssetUpdated={handleAssetUpdated}
+                onClose={() => setIsModalOpen(false)}
+            />
         </Modal>
       )}
     </div>
