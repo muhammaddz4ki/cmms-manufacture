@@ -1,10 +1,4 @@
-Berikut adalah versi **README.md** final yang sudah dirapikan, diperbaiki format kode bloknya, dan siap disalin sepenuhnya.
 
-Anda tinggal menekan tombol **Copy** pada pojok kanan atas blok kode di bawah ini.
-
------
-
-````markdown
 # 🏭 CMMS for Manufacturing (Computerized Maintenance Management System)
 
 ![Project Status](https://img.shields.io/badge/Status-Feature%20Complete-success?style=for-the-badge)
