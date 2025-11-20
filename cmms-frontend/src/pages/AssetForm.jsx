@@ -1,7 +1,7 @@
 // src/pages/AssetForm.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Loader2, Box, Hash, MapPin, List, Save } from 'lucide-react';
+import { Plus, Loader2, Box, Hash, MapPin, List, Save, Image as ImageIcon } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -17,15 +17,17 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
   const [machineId, setMachineId] = useState(initialData?.machine_id || "");
   const [location, setLocation] = useState(initialData?.location || "");
   
+  // State Gambar
+  const [imagePreview, setImagePreview] = useState(initialData?.image || null);
+  const [imageBase64, setImageBase64] = useState(initialData?.image || null);
+
   const [allComponents, setAllComponents] = useState([]); 
   const [allTemplates, setAllTemplates] = useState([]); 
   const [selectedTemplateId, setSelectedTemplateId] = useState(""); 
   
-  // Inisialisasi checkbox dari initialData (jika ada)
+  // Inisialisasi checkbox
   const [selectedComponentIds, setSelectedComponentIds] = useState(() => {
       if (initialData && initialData.components) {
-          // initialData.components adalah array of objects {id, name, ...}
-          // Kita butuh Set dari ID-nya saja
           return new Set(initialData.components.map(c => c.id));
       }
       return new Set();
@@ -59,9 +61,7 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
 
   // Template Logic
   useEffect(() => {
-    
     if (selectedTemplateId === "") {
-       // Jangan reset jika sedang mode edit dan user belum memilih template baru
        // eslint-disable-next-line react-hooks/set-state-in-effect
        if (!isEditMode) setSelectedComponentIds(new Set()); 
     } else {
@@ -72,6 +72,19 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
     }
   }, [selectedTemplateId, allTemplates, isEditMode]);
 
+  // Handle Image Upload
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setImageBase64(reader.result);
+            setImagePreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+
   const handleComponentChange = (componentId) => {
     setSelectedTemplateId(""); 
     setSelectedComponentIds(prevIds => {
@@ -80,6 +93,12 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
       else newIds.add(componentId);
       return newIds;
     });
+  };
+
+  const resetForm = () => {
+    setName(""); setMachineId(""); setLocation(""); 
+    setSelectedTemplateId(""); setSelectedComponentIds(new Set());
+    setImagePreview(null); setImageBase64(null);
   };
 
   const handleSubmit = async (e) => {
@@ -92,23 +111,21 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
       name: name,
       machine_id: machineId,
       location: location,
+      image: imageBase64, // Kirim gambar
       component_ids: Array.from(selectedComponentIds) 
     };
 
     try {
       let response;
       if (isEditMode) {
-        // PATCH
         response = await axios.patch(`${ASSETS_API}/${initialData.id}`, assetData);
         onAssetUpdated(response.data);
         onClose();
       } else {
-        // POST
         response = await axios.post(ASSETS_API, assetData);
         onAssetCreated(response.data); 
         setSuccess(`Aset "${response.data.name}" berhasil disimpan.`);
-        // Reset form only on create
-        setName(""); setMachineId(""); setLocation(""); setSelectedTemplateId(""); setSelectedComponentIds(new Set());
+        resetForm();
       }
     } catch (err) {
       setError(err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'menyimpan'} aset.`);
@@ -171,6 +188,24 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
           </div>
         </div>
       </div>
+
+      {/* Upload Gambar */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">Foto Mesin (Opsional)</label>
+        <div className="flex items-center gap-4">
+            {imagePreview ? (
+                <img src={imagePreview} alt="Preview Mesin" className="h-20 w-20 object-cover rounded-lg border shadow-sm" />
+            ) : (
+                <div className="h-20 w-20 bg-slate-100 rounded-lg border border-dashed border-slate-300 flex items-center justify-center text-slate-400">
+                    <ImageIcon size={24} />
+                </div>
+            )}
+            <label className="cursor-pointer inline-flex items-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors">
+                <ImageIcon size={18} className="mr-2"/> {imagePreview ? "Ganti Foto" : "Upload Foto"}
+                <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+            </label>
+        </div>
+      </div>
       
       {/* Pilihan Komponen */}
       <div>
@@ -199,22 +234,16 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
         )}
       </div>
       
-      <div className="text-right pt-2 flex justify-end gap-3">
+      <div className="text-right pt-2 flex justify-end gap-3 border-t border-slate-100">
         {isEditMode && (
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50">Batal</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">Batal</button>
         )}
         <button 
           type="submit" 
           disabled={isSubmitting || loading}
           className="inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-transform hover:-translate-y-0.5"
         >
-          {isSubmitting ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : isEditMode ? (
-            <Save className="mr-2 h-4 w-4" />
-          ) : (
-            <Plus className="mr-2 h-4 w-4" />
-          )}
+          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isEditMode ? <Save className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
           {isSubmitting ? 'Menyimpan...' : isEditMode ? 'Simpan Perubahan' : 'Simpan Aset'}
         </button>
       </div>

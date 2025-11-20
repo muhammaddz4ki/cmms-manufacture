@@ -36,6 +36,9 @@ def create_asset():
             name=data['name'],
             machine_id=data['machine_id'],
             location=data.get('location', ''),
+            # --- SIMPAN GAMBAR ---
+            image=data.get('image', ''), 
+            # ---------------------
             components=component_list
         )
         
@@ -47,7 +50,7 @@ def create_asset():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# --- RUTE BARU: PATCH (Edit) Aset ---
+# --- PATCH (Edit) Aset ---
 @assets_bp.route('/assets/<asset_id>', methods=['PATCH'])
 def update_asset(asset_id):
     try:
@@ -57,7 +60,6 @@ def update_asset(asset_id):
         if 'name' in data:
             asset.name = data['name']
         if 'machine_id' in data:
-            # Cek keunikan jika ID berubah
             if data['machine_id'] != asset.machine_id:
                 if Asset.objects(machine_id=data['machine_id']).first():
                     return jsonify({"error": "ID Mesin sudah digunakan."}), 400
@@ -66,6 +68,11 @@ def update_asset(asset_id):
             asset.location = data['location']
         if 'status' in data:
             asset.status = data['status']
+        
+        # --- UPDATE GAMBAR ---
+        if 'image' in data:
+            asset.image = data['image']
+        # ---------------------
         
         # Update Komponen
         if 'component_ids' in data:
@@ -86,7 +93,7 @@ def update_asset(asset_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- RUTE BARU: DELETE (Hapus) Aset ---
+# --- DELETE (Hapus) Aset ---
 @assets_bp.route('/assets/<asset_id>', methods=['DELETE'])
 def delete_asset(asset_id):
     try:

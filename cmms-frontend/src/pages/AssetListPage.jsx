@@ -1,7 +1,7 @@
 // src/pages/AssetListPage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, PackagePlus, HardDrive, MapPin, Activity, Settings, Edit, Trash2 } from 'lucide-react';
+import { FileWarning, PackagePlus, HardDrive, MapPin, Activity, Settings, Edit, Trash2, Image as ImageIcon, X } from 'lucide-react';
 import AssetForm from './AssetForm.jsx'; 
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
@@ -17,7 +17,10 @@ export default function AssetListPage() {
   
   // State untuk Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAsset, setEditingAsset] = useState(null); // State untuk aset yang sedang diedit
+  const [editingAsset, setEditingAsset] = useState(null); 
+
+  // State untuk Zoom Gambar
+  const [viewImage, setViewImage] = useState(null);
 
   const fetchAssets = async () => {
     setLoading(true);
@@ -43,20 +46,17 @@ export default function AssetListPage() {
     fetchAssets();
   }, []); 
 
-  // Handler Create
   const handleAssetCreated = () => {
     fetchAssets(); 
     setIsModalOpen(false);
   };
 
-  // Handler Update
   const handleAssetUpdated = (updatedAsset) => {
     setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
     setIsModalOpen(false);
     setEditingAsset(null);
   };
 
-  // Handler Delete
   const handleDeleteAsset = async (assetId, assetName) => {
       if (!window.confirm(`Apakah Anda yakin ingin menghapus aset "${assetName}"?`)) return;
 
@@ -69,13 +69,11 @@ export default function AssetListPage() {
       }
   };
 
-  // Open Modal Create
   const openCreateModal = () => {
       setEditingAsset(null);
       setIsModalOpen(true);
   };
 
-  // Open Modal Edit
   const openEditModal = (asset) => {
       setEditingAsset(asset);
       setIsModalOpen(true);
@@ -93,7 +91,6 @@ export default function AssetListPage() {
 
   return (
     <div>
-      {/* Header & Action */}
       <div className="flex justify-between items-center mb-6">
         <div>
             <h1 className="text-3xl font-bold text-slate-800">Manajemen Aset</h1>
@@ -107,7 +104,6 @@ export default function AssetListPage() {
         </button>
       </div>
       
-      {/* Tabel Daftar Aset */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {loading && <LoadingState />}
         
@@ -116,6 +112,10 @@ export default function AssetListPage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
+                  {/* Kolom Gambar */}
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider w-16">
+                    Foto
+                  </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
                     <div className="flex items-center gap-2"><HardDrive size={14}/> Nama Mesin</div>
                   </th>
@@ -135,7 +135,7 @@ export default function AssetListPage() {
               <tbody className="bg-white divide-y divide-slate-200">
                 {assets.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500">
+                    <td colSpan="7" className="px-6 py-12 text-center text-slate-500">
                       <div className="flex flex-col items-center gap-3">
                         <div className="p-3 bg-slate-100 rounded-full">
                             <FileWarning size={32} className="text-slate-400" />
@@ -148,6 +148,23 @@ export default function AssetListPage() {
                 )}
                 {assets.map(asset => (
                   <tr key={asset.id} className="hover:bg-slate-50 transition-colors group">
+                    
+                    {/* Foto Thumbnail (Klik untuk Zoom) */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                        {asset.image ? (
+                            <div 
+                                className="h-10 w-10 rounded overflow-hidden border border-slate-200 shadow-sm cursor-pointer hover:opacity-80 transition-opacity mx-auto"
+                                onClick={() => setViewImage(asset.image)}
+                            >
+                                <img src={asset.image} alt={asset.name} className="h-full w-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className="h-10 w-10 rounded bg-slate-100 flex items-center justify-center text-slate-300 mx-auto">
+                                <ImageIcon size={18} />
+                            </div>
+                        )}
+                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-slate-900">{asset.name}</div>
                     </td>
@@ -221,6 +238,21 @@ export default function AssetListPage() {
                 onClose={() => setIsModalOpen(false)}
             />
         </Modal>
+      )}
+
+      {/* --- IMAGE LIGHTBOX (POPUP) --- */}
+      {viewImage && (
+        <div className="fixed inset-0 z-[60] bg-black bg-opacity-90 flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewImage(null)}>
+            <button className="absolute top-4 right-4 text-white p-2 hover:bg-white/20 rounded-full transition-colors" onClick={() => setViewImage(null)}>
+                <X size={32} />
+            </button>
+            <img 
+                src={viewImage} 
+                alt="Preview Fullscreen" 
+                className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+                onClick={(e) => e.stopPropagation()} 
+            />
+        </div>
       )}
     </div>
   );

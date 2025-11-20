@@ -2,6 +2,12 @@
 from . import db, bcrypt
 import datetime
 
+# --- Sub-dokumen untuk Komponen ---
+class Component(db.EmbeddedDocument):
+    name = db.StringField(required=True)
+    part_number = db.StringField()
+    last_checked = db.DateTimeField()
+
 # --- Model Inventaris Gudang ---
 class ComponentItem(db.Document):
     name = db.StringField(required=True, unique=True)
@@ -18,12 +24,17 @@ class ComponentItem(db.Document):
             "location": self.location
         }
 
-# --- Model Utama Aset (Mesin Anda) ---
+# --- Model Utama Aset (Mesin) ---
 class Asset(db.Document):
     name = db.StringField(required=True)
     machine_id = db.StringField(unique=True, required=True)
     location = db.StringField()
     status = db.StringField(default='running')
+    
+    # --- FIELD BARU: Gambar Aset ---
+    image = db.StringField() # Base64 string
+    # -----------------------------
+
     components = db.ListField(db.ReferenceField(ComponentItem))
     maintenance_history = db.ListField(db.ReferenceField('WorkOrder'))
     
@@ -42,6 +53,7 @@ class Asset(db.Document):
             "machine_id": self.machine_id,
             "location": self.location,
             "status": self.status,
+            "image": self.image, # <-- Sertakan gambar di JSON
             "components": component_list 
         }
 
@@ -70,12 +82,14 @@ class User(db.Document):
 class WorkOrder(db.Document):
     title = db.StringField(required=True)
     description = db.StringField()
-    status = db.StringField(default='open')
+    status = db.StringField(default='open') 
     priority = db.StringField(default='medium')
     type = db.StringField()
     component = db.ReferenceField(ComponentItem) 
     asset = db.ReferenceField(Asset, required=True)
     assigned_to = db.ReferenceField(User)
+    created_by_role = db.StringField() 
+    evidence_image = db.StringField() 
     created_at = db.DateTimeField(default=datetime.datetime.utcnow)
     due_date = db.DateTimeField()
     completed_at = db.DateTimeField()
@@ -99,6 +113,8 @@ class WorkOrder(db.Document):
             "asset_id": asset_id,
             "asset_name": asset_name,
             "assigned_to": user_name,
+            "created_by_role": self.created_by_role,
+            "evidence_image": self.evidence_image,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "due_date": self.due_date.isoformat() if self.due_date else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
@@ -148,14 +164,12 @@ class ComplianceLog(db.Document):
             "evidence_document_url": self.evidence_document_url,
         }
 
-# --- MODEL BARU: TIPE ASET (TEMPLATE) ---
+# --- Model Template Aset ---
 class AssetTemplate(db.Document):
-    name = db.StringField(required=True, unique=True) # Misal: "Wheel Balancing Machine"
-    # Daftar referensi komponen yang dibutuhkan oleh template ini
+    name = db.StringField(required=True, unique=True)
     components = db.ListField(db.ReferenceField(ComponentItem))
 
     def to_json(self):
-        # Kirim daftar ID komponen
         component_ids = [str(comp.id) for comp in self.components if comp]
         return {
             "id": str(self.id),
