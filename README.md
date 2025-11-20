@@ -1,3 +1,10 @@
+Berikut adalah versi **README.md** final yang sudah dirapikan, diperbaiki format kode bloknya, dan siap disalin sepenuhnya.
+
+Anda tinggal menekan tombol **Copy** pada pojok kanan atas blok kode di bawah ini.
+
+-----
+
+````markdown
 # 🏭 CMMS for Manufacturing (Computerized Maintenance Management System)
 
 ![Project Status](https://img.shields.io/badge/Status-Feature%20Complete-success?style=for-the-badge)
@@ -96,16 +103,17 @@ pip install -r requirements.txt
 
 # 4. Jalankan Server
 python run.py
+````
 
-✅ Status: Server Backend berjalan di http://127.0.0.1:5000.
+> ✅ **Status:** Server Backend berjalan di `http://127.0.0.1:5000`.
+>
+> ⚠️ **PENTING:** Biarkan terminal ini tetap terbuka. Jangan ditutup selama aplikasi digunakan.
 
-⚠️ PENTING: Biarkan terminal ini tetap terbuka. Jangan ditutup selama aplikasi digunakan.
+### 2\. Setup Frontend (Terminal 2)
 
-2. Setup Frontend (Terminal 2)
-Buka Terminal Baru (New Terminal). Jangan gunakan terminal yang sedang menjalankan backend.
+Buka **Terminal Baru (New Terminal)**. Jangan gunakan terminal yang sedang menjalankan backend.
 
-Bash
-
+```bash
 # 1. Masuk ke direktori frontend
 cd cmms-frontend
 
@@ -114,22 +122,27 @@ npm install
 
 # 3. Jalankan Mode Pengembangan
 npm run dev
-✅ Status: Aplikasi Frontend berjalan di http://localhost:5173.
+```
 
-💡 Info: Frontend akan otomatis terhubung ke Backend yang berjalan di Terminal 1.
+> ✅ **Status:** Aplikasi Frontend berjalan di `http://localhost:5173`.
+>
+> 💡 **Info:** Frontend akan otomatis terhubung ke Backend yang berjalan di Terminal 1.
 
-🔑 Akun Demo (Default Seeder)
-Jika Anda telah melakukan seeding database, gunakan kredensial berikut:
+-----
 
-Admin: admin@cmms.com / password123
+## 🔑 Akun Demo (Default Seeder)
 
-Manager: manager@cmms.com / password123
+Jika Anda telah melakukan *seeding* database, gunakan kredensial berikut:
 
-Technician: tech@cmms.com / password123
+  * **Admin:** `admin@cmms.com` / `password123`
+  * **Manager:** `manager@cmms.com` / `password123`
+  * **Technician:** `tech@cmms.com` / `password123`
 
-📂 Struktur Direktori
-Plaintext
+-----
 
+## 📂 Struktur Direktori
+
+```text
 root/
 ├── cmms-backend/       # Server Side Logic (Flask API)
 │   ├── models/         # Skema Database (MongoEngine)
@@ -143,3 +156,7 @@ root/
     │   ├── pages/      # Halaman utama (Dashboard, WO, dll)
     │   └── context/    # Auth Context
     └── package.json
+```
+
+```
+```
