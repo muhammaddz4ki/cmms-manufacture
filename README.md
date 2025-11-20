@@ -1,84 +1,106 @@
 # CMMS for Manufacturing (Computerized Maintenance Management System)
 
-Proyek ini adalah sistem manajemen pemeliharaan berbasis web yang dirancang untuk lingkungan manufaktur. Sistem ini melacak aset, mengelola Work Order, menjadwalkan pemeliharaan, dan menyediakan laporan kinerja.
+Proyek ini adalah sistem manajemen pemeliharaan berbasis web tingkat lanjut yang dirancang khusus untuk lingkungan manufaktur. Sistem ini tidak hanya melacak aset, tetapi juga menerapkan alur kerja (workflow) pemeliharaan yang ketat mulai dari pengajuan, pengerjaan, hingga verifikasi akhir dengan bukti digital.
 
-**Status Proyek:** **Feature Complete** (Semua modul inti sudah selesai).
+**Status Proyek:** **Feature Complete** (Siap Produksi dengan Logika Bisnis Penuh).
 
-## 🚀 Fitur Utama yang Sudah Diimplementasikan
+## 🚀 Fitur Utama & Pembaruan Terbaru
 
-| Modul | Fungsionalitas | Keterangan |
-| :--- | :--- | :--- |
-| **Authentication & RBAC** | Login, Register, Logout | Kontrol Akses Berbasis Peran (**Admin**, **Manager**, **Technician**). Pengguna pertama otomatis menjadi Admin. |
-| **Gudang (Inventaris)** | CRUD, Stok Dinamis | **Master List** komponen (Spare Parts). Stok otomatis **berkurang** saat Work Order diselesaikan. |
-| **Aset (Mesin)** | Create, Read, Update | Manajemen *Bill of Materials* (BOM) Aset. Form "Tambah Aset" terintegrasi dengan **Template Aset** (Gudang). |
-| **Work Order (WO)** | CRUD (Create, Read, Update, Delete) | Pembuatan WO, Update Status, dan **Edit Detail** (menggunakan modal). WO otomatis mengonsumsi stok Gudang. |
-| **Penjadwalan** | Create, Read, Delete | Pemeliharaan Preventif berkala. Dropdown komponen dinamis. |
-| **Laporan & Analitik** | Dinamis & Ekspor | **Dashboard Analitik** menampilkan *live* status WO dan Aset. Mendukung **Ekspor CSV dan PDF** dari Backend. |
-| **Kepatuhan** | Create, Read, Update | Pelacakan status kalibrasi/regulasi aset. |
-| **Pengguna** | Create, Read, Update (Role), Delete | Admin dapat mengelola semua pengguna dan peran mereka. |
-
----
-
-## 🏗️ Arsitektur Proyek dan Struktur Kode
-
-Aplikasi ini dibagi menjadi dua layanan independen:
-
-| Bagian | Teknologi Utama | Rincian Struktur Kode |
-| :--- | :--- | :--- |
-| **Frontend (cmms-frontend)** | **React, Vite, Tailwind CSS, Axios, React Router v6** | Kode dibagi menjadi `src/pages` (halaman utama), `src/components` (komponen UI & Layout), dan `src/context` (manajemen sesi global). |
-| **Backend (cmms-backend)** | **Python, Flask, MongoEngine, Flask-Bcrypt, ReportLab** | Setiap fitur (Aset, WO, Inventaris, Template, Kepatuhan) memiliki *Blueprint* dan file `routes.py` terpisah. |
-
-## ⚙️ Petunjuk Instalasi Lokal (Setup)
-
-Untuk menjalankan aplikasi ini, Anda harus menjalankan server **MongoDB**, **Backend (Flask)**, dan **Frontend (React)** secara bersamaan.
-
-### 1. Setup Backend (Flask + MongoDB)
-
-1.  **Navigasi ke Folder Backend:**
-    ```bash
-    cd cmms-backend
-    ```
-
-2.  **Instalasi & Aktivasi Virtual Environment:**
-    ```bash
-    python -m venv venv
-    .\venv\Scripts\activate  # Windows
-    # source venv/bin/activate  # macOS/Linux
-    
-    pip install -r requirements.txt 
-    pip install Flask-Bcrypt reportlab # Pastikan library Bcrypt dan ReportLab terinstal
-    ```
-
-3.  **Jalankan Server Backend:**
-    ```bash
-    python run.py
-    # Server akan berjalan di: [http://127.0.0.1:5000](http://127.0.0.1:5000)
-    ```
-    > **PENTING:** Biarkan terminal ini terbuka.
-
-### 2. Setup Frontend (React + Vite)
-
-1.  **Buka Terminal Baru** (biarkan terminal backend tetap berjalan).
-2.  **Navigasi ke Folder Frontend:**
-    ```bash
-    cd ../cmms-frontend
-    ```
-
-3.  **Instal Dependensi:**
-    ```bash
-    npm install
-    ```
-
-4.  **Jalankan Server Frontend:**
-    ```bash
-    npm run dev
-    # Server akan berjalan di: http://localhost:5173
-    ```
+| Modul | Fungsionalitas & Logika Bisnis |
+| :--- | :--- |
+| **Authentication & RBAC** | Kontrol akses ketat untuk **Admin**, **Manager**, dan **Technician**. Teknisi memiliki akses terbatas (hanya eksekusi tugas). |
+| **Work Order (Lifecycle)** | Alur kerja bertingkat: **Open** → **In Progress** → **Pending Verification** → **Completed**. Mendukung status **Pending Approval** untuk WO yang dibuat Manajer. |
+| **Sistem Verifikasi** | **Validasi Ganda:** Teknisi wajib mengunggah **Foto Bukti Selesai** untuk mengajukan penyelesaian. Admin/Manajer wajib memverifikasi foto sebelum menutup WO. |
+| **Gudang (Inventaris)** | Stok terkoneksi langsung dengan WO. Stok komponen hanya akan **berkurang otomatis** setelah WO diverifikasi statusnya menjadi *Completed*. |
+| **Manajemen Aset** | Pelacakan status mesin secara *real-time* (**Running** atau **Down**). Mendukung upload foto aset dan *Bill of Materials* (BOM). |
+| **Smart Dashboard** | **Pusat Komando** dengan notifikasi interaktif. Menampilkan peringatan jadwal H-7, stok menipis, dan daftar WO yang membutuhkan verifikasi segera. |
+| **Notifikasi & Alert** | Ikon lonceng interaktif yang memberitahu Admin tentang tugas mendesak dan persetujuan yang tertunda. |
+| **Laporan & Lokalisasi** | Format waktu otomatis menggunakan **Waktu Indonesia Barat (WIB)**. Ekspor laporan kinerja aset ke PDF dan CSV. |
 
 ---
 
-## 🔒 Akses Awal & Registrasi
+## 🔄 Alur Kerja Work Order (Workflow)
 
-1.  Buka browser Anda ke **`http://localhost:5173`**. Anda akan diarahkan ke halaman **Login**.
-2.  **Registrasi Admin Pertama:** Karena database pengguna Anda kosong, klik link **"Daftar Akun Baru"**. Pengguna pertama yang mendaftar akan otomatis diberi peran **`ADMIN`**.
-3.  **Login:** Gunakan kredensial Admin Anda. Anda sekarang dapat mengakses semua modul dan mulai mengisi data Gudang dan Aset.
+Sistem ini menerapkan *Standard Operating Procedure* (SOP) pemeliharaan industri:
+
+1.  **Pembuatan WO (Inisiasi):**
+    * **Admin:** WO langsung berstatus `OPEN`.
+    * **Manager:** WO berstatus `PENDING APPROVAL` (Butuh persetujuan Admin).
+    * **Technician:** *Tidak diizinkan membuat WO.*
+    * *Syarat:* Wajib menyertakan **Foto Awal (Masalah)** saat pembuatan.
+
+2.  **Pengerjaan (Eksekusi):**
+    * Teknisi menerima tugas dan menekan tombol **"Mulai"** (Status: `IN PROGRESS`).
+    * Nama teknisi otomatis tercatat dalam sistem.
+
+3.  **Penyelesaian (Pelaporan):**
+    * Setelah selesai, Teknisi **WAJIB** mengunggah **Foto Bukti Perbaikan**.
+    * Status berubah menjadi `PENDING VERIFICATION`.
+
+4.  **Verifikasi & Penutupan:**
+    * Admin/Manager menerima notifikasi.
+    * Admin meninjau perbandingan *Foto Awal* vs *Foto Bukti*.
+    * Jika disetujui, Admin menekan **"Verifikasi Selesai"**.
+    * Status menjadi `COMPLETED` dan stok komponen di gudang otomatis berkurang.
+
+![Diagram Alur Kerja](https://via.placeholder.com/800x400?text=Alur+Kerja+Work+Order+CMMS)
+
+---
+
+## 🏗️ Arsitektur Proyek
+
+Aplikasi dibangun dengan arsitektur terpisah (*decoupled*) untuk skalabilitas:
+
+| Bagian | Teknologi Utama |
+| :--- | :--- |
+| **Frontend** | **React, Vite, Tailwind CSS, Lucide React**<br>Menggunakan `Context API` untuk manajemen sesi dan `Axios` untuk komunikasi API. |
+| **Backend** | **Python, Flask, MongoEngine**<br>Database NoSQL (MongoDB) untuk fleksibilitas skema data aset yang kompleks. |
+| **Security** | **Flask-Bcrypt** (Hashing password), Validasi Input di sisi Server. |
+| **Reporting** | **ReportLab** (Generate PDF otomatis), CSV Writer. |
+
+---
+
+## ⚙️ Petunjuk Instalasi (Setup)
+
+Ikuti langkah ini untuk menjalankan sistem secara lokal.
+
+### Prasyarat
+* Python 3.8+
+* Node.js & npm
+* MongoDB (Pastikan service MongoDB berjalan di port default 27017)
+
+### 1. Setup Backend (Flask API)
+
+```bash
+# 1. Masuk ke folder backend
+cd cmms-backend
+
+# 2. Buat virtual environment
+python -m venv venv
+
+# 3. Aktifkan virtual environment
+# Windows:
+.\venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
+
+# 4. Instal dependencies
+pip install -r requirements.txt
+# Pastikan library khusus terinstal:
+pip install Flask-Bcrypt reportlab mongoengine flask-cors
+
+# 5. Jalankan Server
+python run.py
+# Server berjalan di: [http://127.0.0.1:5000](http://127.0.0.1:5000)
+
+### 2. Setup Frontend (React App)
+
+# 1. Buka terminal BARU dan masuk ke folder frontend
+cd cmms-frontend
+
+# 2. Instal paket node modules
+npm install
+
+# 3. Jalankan mode pengembangan
+npm run dev
+# Aplikasi berjalan di: http://localhost:5173
