@@ -42,8 +42,8 @@ export default function AssetListPage() {
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAssets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
   const handleAssetCreated = () => {

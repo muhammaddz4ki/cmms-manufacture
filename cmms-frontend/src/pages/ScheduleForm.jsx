@@ -1,17 +1,19 @@
 // src/pages/ScheduleForm.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { CalendarPlus, Loader2, Repeat, Calendar } from 'lucide-react';
+import { CalendarPlus, Loader2, Repeat, Calendar, Save } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:5000/api';
 const SCHEDULES_API = `${API_BASE_URL}/schedules`;
 
-export default function ScheduleForm({ assets, onScheduleCreated }) {
-  const [assetId, setAssetId] = useState('');
-  const [taskName, setTaskName] = useState('');
-  const [component, setComponent] = useState(''); 
-  const [frequencyDays, setFrequencyDays] = useState(30);
-  const [description, setDescription] = useState('');
+export default function ScheduleForm({ assets, onScheduleCreated, initialData, onScheduleUpdated, onClose }) {
+  const isEditMode = !!initialData;
+
+  const [assetId, setAssetId] = useState(initialData?.asset_id || '');
+  const [taskName, setTaskName] = useState(initialData?.task_name || '');
+  const [component, setComponent] = useState(initialData?.component || ''); 
+  const [frequencyDays, setFrequencyDays] = useState(initialData?.frequency_days || 30);
+  const [description, setDescription] = useState(initialData?.description_template || '');
   
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -25,10 +27,12 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
     return []; 
   }, [assetId, assets]);
   
+  // Reset component jika asset berubah, TAPI jangan reset saat inisialisasi edit mode
   useEffect(() => {
-   
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setComponent(''); 
+    if (!isEditMode) {
+        setComponent(''); 
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assetId]);
 
   const resetForm = () => {
@@ -46,21 +50,32 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
     setSuccess(null);
     setIsSubmitting(true);
     
-    try {
-      const response = await axios.post(SCHEDULES_API, {
+    const payload = {
         asset_id: assetId,
         task_name: finalTaskName, 
         component: component,
         frequency_days: Number(frequencyDays),
         frequency: `Setiap ${frequencyDays} hari`,
         description_template: description,
-      });
+    };
+
+    try {
+      let response;
+      if (isEditMode) {
+          // EDIT MODE
+          response = await axios.patch(`${SCHEDULES_API}/${initialData.id}`, payload);
+          if (onScheduleUpdated) onScheduleUpdated(response.data);
+          if (onClose) onClose();
+      } else {
+          // CREATE MODE
+          response = await axios.post(SCHEDULES_API, payload);
+          if (onScheduleCreated) onScheduleCreated(response.data);
+          setSuccess(`Jadwal "${response.data.task_name}" berhasil dibuat.`);
+          resetForm();
+      }
       
-      onScheduleCreated(response.data); 
-      setSuccess(`Jadwal "${response.data.task_name}" berhasil dibuat.`);
-      resetForm();
     } catch (err) {
-      setError(err.response?.data?.error || "Gagal membuat jadwal.");
+      setError(err.response?.data?.error || `Gagal ${isEditMode ? 'mengupdate' : 'membuat'} jadwal.`);
     }
     setIsSubmitting(false);
   };
@@ -147,14 +162,23 @@ export default function ScheduleForm({ assets, onScheduleCreated }) {
           ></textarea>
         </div>
 
-        <div className="text-right pt-2">
+        <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            {isEditMode && (
+                <button 
+                    type="button" 
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+                >
+                    Batal
+                </button>
+            )}
           <button 
             type="submit" 
             disabled={isSubmitting}
             className="inline-flex items-center px-6 py-2.5 border border-transparent text-sm font-bold rounded-lg shadow-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-transform hover:-translate-y-0.5"
           >
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarPlus className="mr-2 h-4 w-4" />}
-            Simpan Jadwal
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : isEditMode ? <Save className="mr-2 h-4 w-4" /> : <CalendarPlus className="mr-2 h-4 w-4" />}
+            {isSubmitting ? 'Memproses...' : isEditMode ? 'Simpan Perubahan' : 'Simpan Jadwal'}
           </button>
         </div>
       </form>

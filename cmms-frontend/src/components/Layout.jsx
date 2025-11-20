@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import SidebarLink from './SidebarLink.jsx'; 
+import NotificationDropdown from './NotificationDropdown.jsx'; // IMPORT KOMPONEN BARU
 import {
   LayoutDashboard,
   HardDrive,
@@ -16,7 +17,6 @@ import {
   LogOut,
   Warehouse,
   ClipboardCopy,
-  Bell,
   Search,
 } from 'lucide-react';
 import { useAuth } from '../context/useAuth.js'; 
@@ -44,7 +44,6 @@ export default function Layout() {
       
       {/* --- SIDEBAR DESKTOP --- */}
       <aside className="hidden md:flex md:flex-col w-72 bg-white border-r border-slate-200 h-full fixed left-0 top-0 z-30">
-        {/* Logo Area */}
         <div className="h-20 flex items-center px-6 border-b border-slate-100">
             <Link to="/" className="flex items-center gap-3 group">
                 <div className="bg-blue-50 p-1.5 rounded-lg group-hover:bg-blue-100 transition-colors">
@@ -57,7 +56,6 @@ export default function Layout() {
             </Link>
         </div>
 
-        {/* Navigation List */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
             <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-2">Menu Utama</p>
             {navItems.map((item) => (
@@ -69,7 +67,6 @@ export default function Layout() {
             ))}
         </nav>
 
-        {/* User Profile Snippet (Bottom Sidebar) */}
         <div className="p-4 border-t border-slate-100">
             <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-sm">
@@ -91,15 +88,15 @@ export default function Layout() {
       </aside>
 
 
-      {/* --- SIDEBAR MOBILE (Overlay) --- */}
+      {/* --- SIDEBAR MOBILE --- */}
       {isSidebarOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>
           <aside className="absolute top-0 left-0 w-72 h-full bg-white shadow-2xl flex flex-col">
             <div className="h-20 flex items-center justify-between px-6 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                 <img src={LogoImage} alt="Logo" className="h-8"/>
-                 <span className="font-bold text-lg text-slate-800">Maint-Track</span>
+                  <img src={LogoImage} alt="Logo" className="h-8"/>
+                  <span className="font-bold text-lg text-slate-800">Maint-Track</span>
               </div>
               <button onClick={() => setIsSidebarOpen(false)} className="text-slate-500 hover:text-slate-800">
                 <X size={24} />
@@ -140,7 +137,6 @@ export default function Layout() {
                     <Menu size={24} />
                 </button>
                 
-                {/* Search Bar (Visual Only) */}
                 <div className="hidden md:flex items-center bg-slate-100 rounded-full px-4 py-2 w-64 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                     <Search size={18} className="text-slate-400 mr-2" />
                     <input 
@@ -152,20 +148,17 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-4">
-                {/* Notifications (Visual Only) */}
-                <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition relative">
-                    <Bell size={20} />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-                </button>
+                
+                {/* --- NOTIFICATION DROPDOWN (Ganti tombol statis dengan komponen ini) --- */}
+                <NotificationDropdown />
+                {/* ------------------------------------------------------------------- */}
 
-                {/* Profile Dropdown Trigger */}
                 <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
                     <div className="text-right hidden sm:block">
                         <p className="text-sm font-bold text-slate-800 leading-tight">{user?.name}</p>
                         <p className="text-xs text-slate-500 font-medium uppercase">{user?.role}</p>
                     </div>
                     <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm cursor-pointer">
-                         {/* Placeholder Avatar */}
                          <div className="w-full h-full bg-slate-800 flex items-center justify-center text-white font-bold">
                              {user?.name?.charAt(0)}
                          </div>

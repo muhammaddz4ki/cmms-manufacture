@@ -1,7 +1,7 @@
 // src/pages/SchedulePage.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FileWarning, Trash2, CalendarPlus, Calendar, HardDrive, Repeat } from 'lucide-react';
+import { FileWarning, Trash2, CalendarPlus, Calendar, HardDrive, Repeat, Edit, AlertTriangle, Clock } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx';
 import ErrorState from '../components/ErrorState.jsx';
 import ScheduleForm from './ScheduleForm.jsx';
@@ -15,10 +15,11 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // State untuk Modal Create
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  // State untuk Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState(null);
 
-  // Fungsi untuk mengambil data awal (Aset dan Jadwal)
+  // Fungsi untuk mengambil data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -47,13 +48,18 @@ export default function SchedulePage() {
     fetchData();
   }, []); 
 
-  // Callback Create
+  // CRUD Handlers
   const handleScheduleCreated = (newSchedule) => {
-    setSchedules([newSchedule, ...schedules]);
-    setIsCreateModalOpen(false); // Tutup modal
+    setSchedules([...schedules, newSchedule].sort((a, b) => new Date(a.next_due_date) - new Date(b.next_due_date)));
+    setIsModalOpen(false);
   };
   
-  // Delete
+  const handleScheduleUpdated = (updatedSchedule) => {
+      setSchedules(schedules.map(s => s.id === updatedSchedule.id ? updatedSchedule : s).sort((a, b) => new Date(a.next_due_date) - new Date(b.next_due_date)));
+      setIsModalOpen(false);
+      setEditingSchedule(null);
+  };
+
   const handleDeleteSchedule = async (scheduleId, taskName) => {
     if (!window.confirm(`Hapus jadwal rutin "${taskName}"?`)) {
       return;
@@ -68,11 +74,56 @@ export default function SchedulePage() {
     }
   };
 
-  const formatDate = (isoString) => {
+  // Modal Triggers
+  const openCreateModal = () => {
+      setEditingSchedule(null);
+      setIsModalOpen(true);
+  };
+
+  const openEditModal = (schedule) => {
+      setEditingSchedule(schedule);
+      setIsModalOpen(true);
+  };
+
+  // --- FITUR BARU: FORMAT WAKTU INDONESIA (WIB) ---
+  const formatDateWIB = (isoString) => {
     if (!isoString) return '-';
-    return new Date(isoString).toLocaleDateString('id-ID', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    });
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat('id-ID', {
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric',
+      timeZone: 'Asia/Jakarta', // Force WIB
+    }).format(date);
+  };
+
+  // --- FITUR BARU: ALERT 7 HARI ---
+  const getDueStatus = (dateString) => {
+      if (!dateString) return null;
+      const today = new Date();
+      const dueDate = new Date(dateString);
+      
+      // Hitung selisih dalam milidetik
+      const diffTime = dueDate - today;
+      // Konversi ke hari (Math.ceil agar pembulatan ke atas)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) {
+          return {
+              type: 'overdue',
+              label: `Terlewat ${Math.abs(diffDays)} hari`,
+              className: 'bg-red-100 text-red-700 border-red-200'
+          };
+      } else if (diffDays <= 7) {
+          return {
+              type: 'warning',
+              label: diffDays === 0 ? 'Hari ini!' : `${diffDays} hari lagi`,
+              className: 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse'
+          };
+      }
+      
+      return null; // Masih aman
   };
 
   if (error) return <ErrorState message={error} />;
@@ -86,7 +137,7 @@ export default function SchedulePage() {
             <p className="text-slate-500 mt-1">Atur jadwal preventive maintenance untuk aset Anda.</p>
         </div>
         <button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={openCreateModal}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg shadow-md hover:bg-blue-700 transition-all transform hover:-translate-y-0.5"
         >
             <CalendarPlus size={18} className="mr-2" /> Buat Jadwal Baru
@@ -103,7 +154,7 @@ export default function SchedulePage() {
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-1/4">
-                     Tugas & Deskripsi
+                      Tugas & Deskripsi
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
                     <div className="flex items-center gap-1"><HardDrive size={14}/> Mesin (Aset)</div>
@@ -131,61 +182,91 @@ export default function SchedulePage() {
                     </td>
                   </tr>
                 )}
-                {schedules.map(s => (
-                  <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
+                {schedules.map(s => {
+                    const dueStatus = getDueStatus(s.next_due_date);
                     
-                    {/* Tugas */}
-                    <td className="px-6 py-4">
-                        <div className="text-sm font-bold text-slate-900">{s.task_name}</div>
-                        {/* (Opsional: Tampilkan deskripsi pendek jika ada) */}
-                    </td>
-                    
-                    {/* Nama Aset */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-medium">
-                        {s.asset_name}
-                    </td>
-                    
-                    {/* Frekuensi */}
-                    <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                            {s.frequency} ({s.frequency_days} hari)
-                        </span>
-                    </td>
-                    
-                    {/* Jadwal Berikutnya */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
-                        {formatDate(s.next_due_date)}
-                    </td>
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
+                        
+                        {/* Tugas */}
+                        <td className="px-6 py-4">
+                            <div className="text-sm font-bold text-slate-900">{s.task_name}</div>
+                            {s.description_template && (
+                                <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{s.description_template}</div>
+                            )}
+                        </td>
+                        
+                        {/* Nama Aset */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                             <div className="text-sm font-medium text-slate-800">{s.asset_name}</div>
+                             {s.component && (
+                                 <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200">
+                                     {s.component}
+                                 </span>
+                             )}
+                        </td>
+                        
+                        {/* Frekuensi */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                <Clock size={12} className="mr-1"/> {s.frequency}
+                            </span>
+                        </td>
+                        
+                        {/* Jadwal Berikutnya (Dengan Alert) */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
+                            <div className="flex items-center gap-2">
+                                <span>{formatDateWIB(s.next_due_date)}</span>
+                                {dueStatus && (
+                                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${dueStatus.className}`}>
+                                        <AlertTriangle size={10} /> {dueStatus.label}
+                                    </span>
+                                )}
+                            </div>
+                        </td>
 
-                    {/* Opsi Hapus */}
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handleDeleteSchedule(s.id, s.task_name)}
-                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                        title="Hapus Jadwal"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </td>
-                  
-                  </tr>
-                ))}
+                        {/* Opsi */}
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => openEditModal(s)}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit Jadwal"
+                                >
+                                    <Edit size={18} />
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteSchedule(s.id, s.task_name)}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Hapus Jadwal"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                          </div>
+                        </td>
+                      
+                      </tr>
+                    );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* MODAL CREATE */}
-      {isCreateModalOpen && (
+      {/* MODAL CREATE / EDIT */}
+      {isModalOpen && (
         <Modal 
-            isOpen={isCreateModalOpen} 
-            onClose={() => setIsCreateModalOpen(false)} 
-            title="Buat Jadwal Baru"
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+            title={editingSchedule ? "Edit Jadwal" : "Buat Jadwal Baru"}
         >
             <ScheduleForm 
                 assets={assets} 
-                onScheduleCreated={handleScheduleCreated} 
+                initialData={editingSchedule}
+                onScheduleCreated={handleScheduleCreated}
+                onScheduleUpdated={handleScheduleUpdated}
+                onClose={() => setIsModalOpen(false)}
             />
         </Modal>
       )}

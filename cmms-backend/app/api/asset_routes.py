@@ -36,9 +36,10 @@ def create_asset():
             name=data['name'],
             machine_id=data['machine_id'],
             location=data.get('location', ''),
-            # --- SIMPAN GAMBAR ---
+            # --- SIMPAN GAMBAR & STATUS ---
             image=data.get('image', ''), 
-            # ---------------------
+            status=data.get('status', 'running'), # Default running jika tidak dikirim
+            # ------------------------------
             components=component_list
         )
         
@@ -66,13 +67,14 @@ def update_asset(asset_id):
             asset.machine_id = data['machine_id']
         if 'location' in data:
             asset.location = data['location']
+            
+        # Update Status
         if 'status' in data:
             asset.status = data['status']
         
-        # --- UPDATE GAMBAR ---
+        # Update Gambar
         if 'image' in data:
             asset.image = data['image']
-        # ---------------------
         
         # Update Komponen
         if 'component_ids' in data:

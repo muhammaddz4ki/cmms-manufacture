@@ -2,40 +2,49 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ErrorState from '../components/ErrorState.jsx';
-import { Loader2, AlertTriangle, CheckCircle, Package, Activity, Wrench } from 'lucide-react';
+import { 
+    Loader2, AlertTriangle, CheckCircle, Package, Activity, 
+    Wrench, ShieldCheck, CalendarClock, ArrowRight, User, Box, AlertOctagon 
+} from 'lucide-react';
 import StatusChart from '../components/StatusChart.jsx';
 import AssetWOChart from '../components/AssetWOChart.jsx';
+import { Link } from 'react-router-dom'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
-const COMPLIANCE_STATS_API = `${API_BASE_URL}/compliance/stats`;
 
-// --- KOMPONEN STAT CARD (DIPERBAIKI) ---
-// Kita ubah 'icon: IconComponent' menjadi 'icon: Icon' agar lebih ringkas
-const StatCard = ({ title, value, icon: Icon, color, isLoading }) => (
-  <div className="group relative bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+// --- KOMPONEN STAT CARD ---
+const StatCard = ({ title, value, subtitle, icon: Icon, color, isLoading, linkTo, alert }) => (
+  <div className={`group relative bg-white p-5 rounded-2xl border ${alert ? 'border-red-200 bg-red-50' : 'border-slate-100'} shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden`}>
     
-    {/* Decorative Background Blob */}
+    {/* Decorative Blob */}
     <div 
         className="absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-150"
         style={{ backgroundColor: color }}
     />
 
-    <div className="flex items-center justify-between mb-4 relative z-10">
+    <div className="flex items-center justify-between mb-3 relative z-10">
         <div 
-            className="p-3 rounded-xl"
-            style={{ backgroundColor: `${color}15`, color: color }} 
+            className="p-2.5 rounded-xl"
+            style={{ backgroundColor: alert ? '#FEE2E2' : `${color}15`, color: color }} 
         >
-            {/* Render komponen ikon di sini */}
-            <Icon size={24} />
+            <Icon size={22} />
         </div>
+        {linkTo && (
+            <Link to={linkTo} className="text-[10px] font-bold text-slate-400 hover:text-blue-600 flex items-center gap-1 uppercase tracking-wider">
+                Lihat <ArrowRight size={10}/>
+            </Link>
+        )}
     </div>
 
     <div className="relative z-10">
-        <p className="text-slate-500 text-sm font-medium mb-1">{title}</p>
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-wide mb-1">{title}</p>
         {isLoading ? (
-            <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+            <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
         ) : (
-            <h3 className="text-3xl font-extrabold text-slate-800">{value}</h3>
+            <div className="flex items-baseline gap-2">
+                <h3 className={`text-2xl font-extrabold ${alert ? 'text-red-600' : 'text-slate-800'}`}>{value}</h3>
+                {subtitle && <span className="text-[10px] text-slate-400 font-medium">{subtitle}</span>}
+            </div>
         )}
     </div>
   </div>
@@ -44,12 +53,19 @@ const StatCard = ({ title, value, icon: Icon, color, isLoading }) => (
 export default function DashboardPage() {
   const [stats, setStats] = useState({
     total_assets: 0,
-    open_work_orders: 0,
     down_assets: 0,
-    completed_work_orders: 0, 
+    
+    // Inventory
+    total_components: 0,
+    low_stock_components: 0,
+
+    open_work_orders: 0,
     in_progress_work_orders: 0,
-    overdue_compliance: 0,
-    pending_compliance: 0,
+    pending_verification_orders: 0, 
+    completed_work_orders: 0, 
+    total_work_orders: 0,
+    upcoming_schedules: [], 
+    verification_needed_list: [], 
     wo_asset_report: [],
   });
   
@@ -61,17 +77,11 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const [statsResponse, allWosResponse, historyResponse, complianceResponse] = await Promise.all([
+        const [statsResponse, allWosResponse, historyResponse] = await Promise.all([
             axios.get(`${API_BASE_URL}/dashboard/stats`),
-            axios.get(`${API_BASE_URL}/workorders`),
+            axios.get(`${API_BASE_URL}/workorders`), 
             axios.get(`${API_BASE_URL}/workorders/history`),
-            axios.get(COMPLIANCE_STATS_API), 
         ]);
-        
-        const open = statsResponse.data.open_work_orders;
-        const completed = historyResponse.data.length;
-        const totalActive = allWosResponse.data.length;
-        const inProgress = totalActive - open; 
         
         const allWOs = [...allWosResponse.data, ...historyResponse.data];
         const assetMap = {};
@@ -79,40 +89,22 @@ export default function DashboardPage() {
         allWOs.forEach(wo => {
             const assetId = wo.asset_id;
             if (!assetId) return; 
-
             if (!assetMap[assetId]) {
-                assetMap[assetId] = { 
-                    asset_name: wo.asset_name, 
-                    open: 0, 
-                    completed: 0, 
-                    in_progress: 0 
-                };
+                assetMap[assetId] = { asset_name: wo.asset_name, open: 0, completed: 0 };
             }
-            
-            if (wo.status === 'open') assetMap[assetId].open += 1;
-            else if (wo.status === 'in_progress') assetMap[assetId].in_progress += 1;
-            else if (wo.status === 'completed') assetMap[assetId].completed += 1;
+            if (wo.status === 'completed') assetMap[assetId].completed += 1;
+            else assetMap[assetId].open += 1; 
         });
-        const woAssetReport = Object.values(assetMap);
-
+        
         setStats({
-          total_assets: statsResponse.data.total_assets,
-          down_assets: statsResponse.data.down_assets,
-          open_work_orders: open,
-          in_progress_work_orders: inProgress > 0 ? inProgress : 0,
-          completed_work_orders: completed,
-          overdue_compliance: complianceResponse.data.overdue_count,
-          pending_compliance: complianceResponse.data.pending_count,
-          wo_asset_report: woAssetReport,
+            ...statsResponse.data,
+            wo_asset_report: Object.values(assetMap)
         });
+
       } catch (err) {
-        if (err.response) {
-            setError(`Gagal mengambil data: ${err.response.status} ${err.response.statusText}`);
-        } else if (err.request) {
-            setError("Gagal memuat data. Pastikan server Flask (port 5000) berjalan.");
-        } else {
-            setError(`Error: ${err.message}`);
-        }
+        if (err.response) setError(`Gagal: ${err.response.status}`);
+        else if (err.request) setError("Koneksi Server Gagal");
+        else setError(err.message);
         console.error(err);
       }
       setLoading(false);
@@ -121,129 +113,212 @@ export default function DashboardPage() {
     fetchStats();
   }, []); 
 
-  if (error) {
-    return <ErrorState message={error} />
-  }
+  if (error) return <ErrorState message={error} />;
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
-            <h1 className="text-3xl font-bold text-slate-900">Dashboard Ringkasan</h1>
-            <p className="text-slate-500 mt-1">Selamat datang kembali! Berikut adalah tinjauan operasional Anda hari ini.</p>
+            <h1 className="text-3xl font-bold text-slate-900">Pusat Komando</h1>
+            <p className="text-slate-500 mt-1 text-sm">Analisis performa aset, inventaris, dan status pekerjaan.</p>
+        </div>
+        <div className="bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-200 text-xs font-medium text-slate-600 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            System Online
         </div>
       </div>
       
-      {/* 1. KOTAK STATISTIK UTAMA (ROW 1) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+      {/* --- ROW 1: OVERVIEW STATS (6 Kolom) --- */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        
+        {/* 1. Total Aset */}
         <StatCard 
           title="Total Aset" 
           value={stats.total_assets} 
           icon={Package}
-          color="#2563EB" // Blue
+          color="#3B82F6" // Blue
           isLoading={loading} 
+          linkTo="/assets"
+        />
+
+        {/* 2. Total Komponen (Inventory) */}
+        <StatCard 
+          title="Total Sparepart" 
+          value={stats.total_components} 
+          icon={Box}
+          color="#6366F1" // Indigo
+          isLoading={loading} 
+          linkTo="/inventory"
         />
         
+        {/* 3. Stok Menipis (Alert Inventory) */}
         <StatCard 
-          title="WO Aktif (Open)" 
-          value={stats.open_work_orders} 
-          icon={AlertTriangle}
-          color="#DC2626" // Red
+          title="Stok Menipis" 
+          value={stats.low_stock_components} 
+          icon={AlertOctagon}
+          color="#F43F5E" // Rose
           isLoading={loading} 
+          linkTo="/inventory"
+          alert={stats.low_stock_components > 0} // Highlight merah jika ada stok tipis
         />
-        
+
+        {/* 4. WO Aktif */}
         <StatCard 
-          title="WO In Progress" 
+          title="WO Dikerjakan" 
           value={stats.in_progress_work_orders} 
           icon={Wrench}
-          color="#D97706" // Amber
-          isLoading={loading} 
+          color="#F59E0B" // Amber
+          isLoading={loading}
+          linkTo="/work-orders"
         />
-        
+
+        {/* 5. Butuh Verifikasi */}
         <StatCard 
-          title="WO Selesai" 
-          value={stats.completed_work_orders} 
-          icon={CheckCircle}
-          color="#059669" // Green
+          title="Verifikasi" 
+          value={stats.pending_verification_orders} 
+          icon={ShieldCheck}
+          color="#8B5CF6" // Purple
           isLoading={loading} 
+          linkTo="/work-orders"
+        />
+
+        {/* 6. Mesin Down (Critical) */}
+        <StatCard 
+          title="Mesin Down" 
+          value={stats.down_assets}
+          icon={Activity}
+          color="#EF4444" // Red
+          isLoading={loading}
+          linkTo="/assets"
+          alert={stats.down_assets > 0}
         />
       </div>
       
-      {/* 2. ANALITIK DETAIL (ROW 2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+      {/* --- ROW 2: DETAIL OPERASIONAL --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           
-          {/* CHART WO STATUS */}
-          <div className="lg:col-span-3 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-bold text-slate-800">Distribusi Status Work Order</h2>
-              </div>
-              {loading ? (
-                   <div className="h-72 flex items-center justify-center">
-                      <Loader2 className="h-10 w-10 animate-spin text-slate-400" />
-                   </div>
-              ) : (
-                  <div className="h-72 flex items-center justify-center">
-                     <StatusChart 
+          {/* KOLOM KIRI: Chart Status */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 border-b pb-2">Distribusi WO</h2>
+              <div className="flex-1 flex flex-col justify-center">
+                  {loading ? <Loader2 className="animate-spin mx-auto text-slate-300"/> : (
+                      <StatusChart 
                           open={stats.open_work_orders}
                           inProgress={stats.in_progress_work_orders}
                           completed={stats.completed_work_orders}
                       />
+                  )}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-center">
+                  <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                      <span className="block font-bold text-slate-800 text-lg">{stats.total_work_orders}</span>
+                      Total WO
                   </div>
-              )}
-          </div>
-
-          {/* ISU KRITIS */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-              <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                <Activity size={20} className="text-red-500"/>
-                Perhatian Diperlukan
-              </h2>
-              
-              <div className="space-y-4 flex-1">
-                  
-                  {/* Aset Down */}
-                  <div className="p-4 bg-red-50 rounded-xl border border-red-100">
-                      <div className="flex justify-between items-start">
-                          <div>
-                              <p className="text-sm font-bold text-red-800 uppercase tracking-wide mb-1">Aset Down</p>
-                              <p className="text-xs text-red-600/80">Mesin berhenti beroperasi</p>
-                          </div>
-                          <span className="text-3xl font-extrabold text-red-600">{stats.down_assets}</span>
-                      </div>
-                  </div>
-
-                  {/* Compliance Overdue */}
-                  <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-100">
-                      <div className="flex justify-between items-start">
-                          <div>
-                              <p className="text-sm font-bold text-yellow-800 uppercase tracking-wide mb-1">Kepatuhan Overdue</p>
-                              <p className="text-xs text-yellow-600/80">Jadwal kalibrasi terlewat</p>
-                          </div>
-                          <span className="text-3xl font-extrabold text-yellow-600">{stats.overdue_compliance}</span>
-                      </div>
-                  </div>
-                  
-                  {/* Summary Text */}
-                  <div className="mt-auto pt-4 text-center text-xs text-slate-400">
-                    Data diperbarui secara real-time dari server.
+                  <div className="p-2 bg-purple-50 rounded border border-purple-100">
+                      <span className="block font-bold text-purple-700 text-lg">{stats.pending_verification_orders}</span>
+                      Pending
                   </div>
               </div>
+          </div>
+
+          {/* KOLOM TENGAH & KANAN: List Detail */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* 1. JADWAL MENDATANG */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-96">
+                   <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                            <CalendarClock className="text-blue-500" size={18}/> 
+                            Jadwal <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">7 Hari</span>
+                        </h2>
+                        <Link to="/schedules" className="text-[10px] font-bold text-blue-600 hover:underline uppercase">Semua</Link>
+                   </div>
+                   
+                   <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+                        {loading ? <Loader2 className="animate-spin mx-auto mt-10 text-slate-300"/> : 
+                         stats.upcoming_schedules.length === 0 ? (
+                             <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs border-2 border-dashed border-slate-50 rounded-xl">
+                                 <CheckCircle size={24} className="mb-2 text-green-400"/>
+                                 Tidak ada jadwal mendesak.
+                             </div>
+                         ) : (
+                             stats.upcoming_schedules.map((sch, idx) => (
+                                 <div key={idx} className="p-3 rounded-lg border border-slate-100 hover:bg-blue-50 transition-colors flex justify-between items-center group">
+                                     <div>
+                                         <p className="font-bold text-slate-700 text-xs group-hover:text-blue-700">{sch.task_name}</p>
+                                         <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                             <Package size={10}/> {sch.asset_name}
+                                         </p>
+                                     </div>
+                                     <div className="text-right">
+                                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                                             sch.priority === 'high' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                                         }`}>
+                                             {sch.days_left <= 0 ? "HARI INI" : `${sch.days_left} Hari`}
+                                         </span>
+                                     </div>
+                                 </div>
+                             ))
+                         )
+                        }
+                   </div>
+              </div>
+
+              {/* 2. BUTUH VERIFIKASI */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col h-96">
+                   <div className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                            <ShieldCheck className="text-purple-500" size={18}/> 
+                            Verifikasi <span className="text-[10px] text-white bg-purple-500 px-1.5 rounded-full">{stats.pending_verification_orders}</span>
+                        </h2>
+                        <Link to="/work-orders" className="text-[10px] font-bold text-purple-600 hover:underline uppercase">Proses</Link>
+                   </div>
+
+                   <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+                        {loading ? <Loader2 className="animate-spin mx-auto mt-10 text-slate-300"/> : 
+                         stats.verification_needed_list.length === 0 ? (
+                             <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs border-2 border-dashed border-slate-50 rounded-xl">
+                                 <CheckCircle size={24} className="mb-2 text-purple-300"/>
+                                 Semua pekerjaan beres.
+                             </div>
+                         ) : (
+                             stats.verification_needed_list.map((wo, idx) => (
+                                 <div key={idx} className="p-3 rounded-lg border border-purple-100 bg-purple-50/20 hover:bg-purple-50 transition-colors group">
+                                     <div className="flex justify-between items-start mb-1">
+                                         <p className="font-bold text-slate-700 text-xs line-clamp-1 group-hover:text-purple-700">{wo.title}</p>
+                                         <Link to="/work-orders" className="text-[9px] bg-white border border-purple-200 text-purple-600 px-1.5 py-0.5 rounded hover:bg-purple-600 hover:text-white transition uppercase font-bold">
+                                             Review
+                                         </Link>
+                                     </div>
+                                     <div className="flex justify-between items-end text-[10px] text-slate-500">
+                                         <span>{wo.asset_name}</span>
+                                         <span className="flex items-center gap-1 bg-white px-1.5 py-0.5 rounded border border-slate-100">
+                                             <User size={8}/> {wo.technician}
+                                         </span>
+                                     </div>
+                                 </div>
+                             ))
+                         )
+                        }
+                   </div>
+              </div>
+
           </div>
       </div>
 
-      {/* 3. CHART KINERJA PER ASET (ROW 3) */}
+      {/* --- ROW 3: CHART PERFORMA ASET --- */}
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-800 mb-6">Analisis Kinerja per Aset</h2>
+          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-6">Analisis Beban Kerja Aset</h2>
           {loading ? (
-              <div className="h-80 flex items-center justify-center">
-                <Loader2 className="h-10 w-10 animate-spin text-slate-400" />
+              <div className="h-64 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
               </div>
           ) : (
-              <div className="h-80">
+              <div className="h-64">
                   <AssetWOChart 
                       reportData={stats.wo_asset_report.map(r => ({
                         asset_name: r.asset_name, 
-                        open: r.open + r.in_progress, 
+                        open: r.open, 
                         completed: r.completed
                       }))}
                   />

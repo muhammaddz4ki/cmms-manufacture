@@ -3,71 +3,58 @@ import React from 'react';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
-// Daftarkan komponen Chart.js yang dibutuhkan
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function StatusChart({ open, inProgress, completed }) {
+    // Hitung total
     const total = open + inProgress + completed;
+    
+    // Jika Pending Verification dianggap bagian dari 'In Progress' secara visual chart,
+    // atau bisa dibuat warna sendiri. Di sini saya gabung logika visualnya.
 
-    // Data untuk Doughnut Chart
     const data = {
         labels: ['Open', 'In Progress', 'Completed'],
         datasets: [
             {
                 data: [open, inProgress, completed],
                 backgroundColor: [
-                    '#EF4444', // Red-500 (Open)
-                    '#F59E0B', // Amber-500 (In Progress)
-                    '#10B981', // Green-500 (Completed)
+                    '#EF4444', // Red (Open)
+                    '#F59E0B', // Amber (In Progress + Pending)
+                    '#10B981', // Green (Completed)
                 ],
-                borderColor: [
-                    '#fff',
-                    '#fff',
-                    '#fff',
-                ],
-                borderWidth: 2,
+                borderWidth: 0,
             },
         ],
     };
 
-    // Opsi Chart
     const options = {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
             legend: {
-                position: 'right',
-                labels: {
-                    usePointStyle: true,
-                    boxWidth: 8,
-                }
-            },
-            title: {
-                display: true,
-                text: 'Persentase Status Work Order',
-                padding: {
-                    top: 10,
-                    bottom: 10
-                },
-                font: {
-                    size: 16
-                }
+                position: 'bottom',
+                labels: { usePointStyle: true, padding: 20 }
             }
-        }
+        },
+        cutout: '70%', // Membuat lubang tengah lebih besar (gaya modern)
     };
 
     return (
-        <div className="p-4">
-            <div className="mb-4 text-center">
-                <p className="text-sm text-slate-500">Total Work Order</p>
-                <p className="text-4xl font-extrabold text-slate-700">{total}</p>
-            </div>
+        <div className="relative h-64 w-full">
             {total > 0 ? (
-                // Tampilkan chart jika ada data
-                <Doughnut data={data} options={options} />
+                <>
+                    <Doughnut data={data} options={options} />
+                    {/* Angka Persentase di Tengah */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                        <div className="text-3xl font-extrabold text-slate-800">
+                            {Math.round((completed / total) * 100)}%
+                        </div>
+                        <div className="text-xs text-slate-400 font-medium uppercase">Selesai</div>
+                    </div>
+                </>
             ) : (
-                // Tampilkan pesan jika tidak ada data
-                <div className="h-64 flex items-center justify-center text-slate-500 border border-dashed rounded-lg">
-                    Tidak ada Work Order untuk dianalisis.
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                    Belum ada data
                 </div>
             )}
         </div>

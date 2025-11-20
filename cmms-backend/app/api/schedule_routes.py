@@ -11,15 +11,14 @@ schedule_bp = Blueprint('schedule_bp', __name__)
 @schedule_bp.route('/schedules', methods=['GET'])
 def get_schedules():
     try:
+        # Urutkan berdasarkan tanggal jatuh tempo terdekat
         schedules_raw = MaintenanceSchedule.objects().order_by('next_due_date')
         
         safe_schedules = []
         for s in schedules_raw:
             try:
-                # Periksa apakah to_json() berhasil. Jika tidak, blok except akan menangkapnya.
                 safe_schedules.append(s.to_json())
             except Exception:
-                # Jika satu jadwal korup (misal: referensi aset hilang), kita lewati
                 print(f"SKIPPING corrupted schedule: {s.id}")
                 continue 
                 
@@ -63,11 +62,11 @@ def create_schedule():
         new_schedule = MaintenanceSchedule(
             asset=asset,
             task_name=data['task_name'],
-            frequency=data.get('frequency', f'Setiap {days} hari'), # Teks deskriptif
+            frequency=data.get('frequency', f'Setiap {days} hari'), 
             frequency_days=days,
             next_due_date=next_due,
             description_template=data.get('description_template', ''),
-            component=data.get('component', '') # Simpan komponen yang dipilih
+            component=data.get('component', '') 
         )
         
         new_schedule.save()
@@ -77,7 +76,51 @@ def create_schedule():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# --- DELETE schedule tetap sama ---
+# --- PATCH: Update Jadwal (Edit) ---
+@schedule_bp.route('/schedules/<schedule_id>', methods=['PATCH'])
+def update_schedule(schedule_id):
+    try:
+        data = request.get_json()
+        schedule = MaintenanceSchedule.objects.get(id=schedule_id)
+
+        if 'task_name' in data:
+            schedule.task_name = data['task_name']
+        
+        if 'description_template' in data:
+            schedule.description_template = data['description_template']
+            
+        if 'component' in data:
+            schedule.component = data['component']
+
+        # Jika asset berubah
+        if 'asset_id' in data:
+             try:
+                 new_asset = Asset.objects.get(id=data['asset_id'])
+                 schedule.asset = new_asset
+             except DoesNotExist:
+                 return jsonify({"error": "Aset baru tidak ditemukan"}), 404
+
+        # Jika frekuensi berubah, kita update data frekuensi.
+        # NOTE: Kita TIDAK mereset next_due_date secara otomatis saat edit agar tidak mengacaukan jadwal berjalan,
+        # kecuali user nanti meminta fitur reset tanggal.
+        if 'frequency_days' in data:
+            try:
+                days = int(data['frequency_days'])
+                if days <= 0: raise ValueError
+                schedule.frequency_days = days
+                schedule.frequency = f"Setiap {days} hari"
+            except:
+                return jsonify({"error": "Frequency days invalid"}), 400
+
+        schedule.save()
+        return jsonify(schedule.to_json()), 200
+
+    except DoesNotExist:
+        return jsonify({"error": "Jadwal tidak ditemukan"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- DELETE: Hapus Jadwal ---
 @schedule_bp.route('/schedules/<schedule_id>', methods=['DELETE'])
 def delete_schedule(schedule_id):
     try:

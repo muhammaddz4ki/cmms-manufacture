@@ -53,7 +53,7 @@ class Asset(db.Document):
             "machine_id": self.machine_id,
             "location": self.location,
             "status": self.status,
-            "image": self.image, # <-- Sertakan gambar di JSON
+            "image": self.image, 
             "components": component_list 
         }
 
@@ -82,14 +82,25 @@ class User(db.Document):
 class WorkOrder(db.Document):
     title = db.StringField(required=True)
     description = db.StringField()
+    
+    # Status flow: pending_approval -> open -> in_progress -> pending_verification -> completed
     status = db.StringField(default='open') 
+    
     priority = db.StringField(default='medium')
     type = db.StringField()
     component = db.ReferenceField(ComponentItem) 
     asset = db.ReferenceField(Asset, required=True)
     assigned_to = db.ReferenceField(User)
+    
+    # Role pembuat (admin/manager)
     created_by_role = db.StringField() 
+    
+    # Foto saat pembuatan (Masalah/Pencegahan)
+    initial_image = db.StringField() 
+    
+    # Foto saat selesai (Bukti Perbaikan)
     evidence_image = db.StringField() 
+    
     created_at = db.DateTimeField(default=datetime.datetime.utcnow)
     due_date = db.DateTimeField()
     completed_at = db.DateTimeField()
@@ -114,6 +125,7 @@ class WorkOrder(db.Document):
             "asset_name": asset_name,
             "assigned_to": user_name,
             "created_by_role": self.created_by_role,
+            "initial_image": self.initial_image,
             "evidence_image": self.evidence_image,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "due_date": self.due_date.isoformat() if self.due_date else None,

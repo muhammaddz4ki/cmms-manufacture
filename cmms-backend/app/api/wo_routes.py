@@ -1,6 +1,5 @@
 # /cmms-backend/app/api/wo_routes.py
 from flask import Blueprint, request, jsonify, make_response
-# PERUBAHAN: Impor ComponentItem
 from app.models import WorkOrder, Asset, User, ComponentItem 
 from mongoengine.errors import DoesNotExist
 import datetime
@@ -11,10 +10,9 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet 
 
-# Buat Blueprint baru
 wo_bp = Blueprint('wo_bp', __name__)
 
-# --- Fungsi Helper untuk mengambil data laporan ---
+# --- Helper Report ---
 def calculate_asset_report_data():
     all_wos = WorkOrder.objects().all()
     report_data = {}
@@ -33,6 +31,8 @@ def calculate_asset_report_data():
                     "asset_name": asset_name,
                     "open": 0,
                     "in_progress": 0,
+                    "pending_approval": 0,
+                    "pending_verification": 0,
                     "completed": 0,
                     "total_wo": 0
                 }
@@ -40,23 +40,22 @@ def calculate_asset_report_data():
             stats = report_data[asset_id]
             stats["total_wo"] += 1
             
-            if status == 'open':
-                stats["open"] += 1
-            elif status == 'in_progress':
-                stats["in_progress"] += 1
-            elif status == 'completed':
-                stats["completed"] += 1
+            if status == 'open': stats["open"] += 1
+            elif status == 'in_progress': stats["in_progress"] += 1
+            elif status == 'pending_approval': stats["pending_approval"] += 1
+            elif status == 'pending_verification': stats["pending_verification"] += 1
+            elif status == 'completed': stats["completed"] += 1
         
         except Exception as e:
-            print(f"Skipping corrupt WO in report calculation: {e}")
             continue
 
     return list(report_data.values())
 
-# --- GET: Mendapatkan SEMUA Work Order (Hanya yang Aktif) ---
+# --- GET Work Orders ---
 @wo_bp.route('/workorders', methods=['GET'])
 def get_work_orders():
     try:
+        # Ambil semua yang belum COMPLETED sepenuhnya
         wos_raw = WorkOrder.objects(status__ne='completed').order_by('status', '-created_at')
         
         safe_wos = []
@@ -64,14 +63,13 @@ def get_work_orders():
             try:
                 safe_wos.append(wo.to_json())
             except Exception:
-                print(f"SKIPPING corrupted WO: {wo.id}")
                 continue 
                 
         return jsonify(safe_wos), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- GET: Mendapatkan History (WO Selesai) ---
+# --- GET History ---
 @wo_bp.route('/workorders/history', methods=['GET'])
 def get_work_order_history():
     try:
@@ -82,21 +80,38 @@ def get_work_order_history():
             try:
                 safe_wos.append(wo.to_json())
             except Exception:
-                print(f"SKIPPING corrupted history WO: {wo.id}")
                 continue
                 
         return jsonify(safe_wos), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- POST: Membuat Work Order BARU ---
+# --- POST Create Work Order ---
 @wo_bp.route('/workorders', methods=['POST'])
 def create_work_order():
     try:
         data = request.get_json()
         
+        # 1. Cek Role Pembuat
+        creator_role = data.get('created_by_role', 'technician').lower()
+        
+        # Teknisi tidak boleh membuat WO
+        if creator_role == 'technician':
+            return jsonify({"error": "Akses Ditolak: Teknisi tidak dapat membuat Work Order."}), 403
+            
+        # Tentukan Status Awal
+        initial_status = 'open'
+        if creator_role == 'manager':
+            # Jika Manajer yang buat, harus diverifikasi Admin dulu (Pending Approval)
+            initial_status = 'pending_approval'
+
+        # 2. Validasi Input
         if not data.get('title') or not data.get('asset_id') or not data.get('type'):
             return jsonify({"error": "Input tidak lengkap: title, asset_id, dan type diperlukan"}), 400
+
+        # 3. Validasi Foto Awal (Wajib)
+        if not data.get('initial_image'):
+             return jsonify({"error": "Wajib menyertakan foto bagian yang harus diperbaiki."}), 400
 
         try:
             asset = Asset.objects.get(id=data['asset_id'])
@@ -110,30 +125,31 @@ def create_work_order():
             except DoesNotExist:
                 pass 
 
-        # --- PERUBAHAN: Tangani Component ID ---
         wo_component = None
-        if data.get('component_id'): # Frontend sekarang mengirim 'component_id'
+        if data.get('component_id'): 
             try:
                 wo_component = ComponentItem.objects.get(id=data['component_id'])
             except DoesNotExist:
                 return jsonify({"error": "Komponen tidak ditemukan di gudang"}), 404
-        # ------------------------------------
 
         new_wo = WorkOrder(
             title=data['title'],
             description=data.get('description', ''),
             priority=data.get('priority', 'medium'),
             type=data['type'],
+            status=initial_status, # Set status awal sesuai role
             asset=asset,
             assigned_to=assigned_user,
-            component=wo_component # Simpan referensi ke ComponentItem
+            component=wo_component,
+            created_by_role=creator_role,
+            initial_image=data.get('initial_image')
         )
         
         if data.get('due_date'):
             try:
                 new_wo.due_date = datetime.datetime.fromisoformat(data['due_date'])
             except ValueError:
-                return jsonify({"error": "Format due_date salah. Gunakan ISO format."}), 400
+                return jsonify({"error": "Format due_date salah."}), 400
 
         new_wo.save()
         
@@ -142,66 +158,69 @@ def create_work_order():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-# --- PATCH (Update) Work Order (Logika Stok Baru) ---
+# --- PATCH Update Work Order (PERBAIKAN UTAMA ADA DI SINI) ---
 @wo_bp.route('/workorders/<wo_id>', methods=['PATCH'])
 def update_work_order(wo_id):
     try:
         data = request.get_json()
         wo = WorkOrder.objects.get(id=wo_id)
-        
-        # Simpan status lama
         old_status = wo.status
 
-        # Update field umum
-        if 'title' in data:
-            wo.title = data['title']
-        if 'description' in data:
-            wo.description = data['description']
-        if 'type' in data:
-            wo.type = data['type']
-        if 'priority' in data:
-            wo.priority = data['priority']
+        # Update fields umum
+        if 'title' in data: wo.title = data['title']
+        if 'description' in data: wo.description = data['description']
+        if 'priority' in data: wo.priority = data['priority']
+        if 'evidence_image' in data: wo.evidence_image = data['evidence_image']
         
-        # Update referensi komponen
+        # --- NEW LOGIC: Update Teknisi (Assigned To) ---
+        # Ini penting agar nama teknisi tersimpan saat dia klik 'Mulai' atau 'Selesai'
+        if 'assigned_to_id' in data and data['assigned_to_id']:
+            try:
+                technician = User.objects.get(id=data['assigned_to_id'])
+                wo.assigned_to = technician
+            except DoesNotExist:
+                pass 
+        # ------------------------------------------------
+        
         if 'component_id' in data:
              if data['component_id']:
                  wo.component = ComponentItem.objects.get(id=data['component_id'])
              else:
                  wo.component = None
-        
+
         if 'status' in data:
             new_status = data['status']
-            allowed_statuses = ['open', 'in_progress', 'completed']
+            allowed_statuses = ['open', 'in_progress', 'pending_approval', 'pending_verification', 'completed']
+            
             if new_status not in allowed_statuses:
                 return jsonify({"error": "Status tidak valid"}), 400
             
-            wo.status = new_status
+            # --- LOGIC FLOW ---
             
-            # --- LOGIKA PENGURANGAN STOK ---
-            # Jika status BARU adalah 'completed' DAN status LAMA BUKAN 'completed'
-            if new_status == 'completed' and old_status != 'completed':
-                wo.completed_at = datetime.datetime.utcnow()
-                
-                # Cek apakah WO ini menggunakan komponen
-                if wo.component:
-                    try:
-                        # Kurangi stok di Gudang (ComponentItem)
-                        comp_item = ComponentItem.objects.get(id=wo.component.id)
-                        if comp_item.stock_quantity > 0:
-                            comp_item.stock_quantity -= 1
-                            comp_item.save()
-                        else:
-                            # Stok sudah 0, tidak bisa dikurangi lagi (hanya logging)
-                            print(f"Peringatan: Stok untuk {comp_item.name} sudah habis.")
-                    except DoesNotExist:
-                        print(f"Peringatan: Komponen {wo.component.id} tidak ditemukan di gudang saat update stok.")
+            # 1. Approval (Pending Approval -> Open)
+            if old_status == 'pending_approval' and new_status == 'open':
+                pass 
+            
+            # 2. Technician Finish (In Progress -> Pending Verification)
+            if new_status == 'pending_verification':
+                has_evidence = data.get('evidence_image') or wo.evidence_image
+                if not has_evidence:
+                    return jsonify({"error": "Gagal: Wajib upload bukti foto sebelum verifikasi."}), 400
 
-            # Jika status diubah kembali dari 'completed'
-            elif new_status != 'completed' and old_status == 'completed':
-                wo.completed_at = None
-                # NOTE: Kita tidak menambah stok kembali secara otomatis
-                # (Asumsi: komponen yang sudah dipakai tidak bisa dikembalikan ke stok)
-            # ----------------------------------
+            # 3. Final Verification (Pending Verification -> Completed)
+            if new_status == 'completed':
+                if old_status != 'completed':
+                    # Kurangi Stok
+                    wo.completed_at = datetime.datetime.utcnow()
+                    if wo.component:
+                        try:
+                            comp_item = ComponentItem.objects.get(id=wo.component.id)
+                            if comp_item.stock_quantity > 0:
+                                comp_item.stock_quantity -= 1
+                                comp_item.save()
+                        except DoesNotExist: pass
+            
+            wo.status = new_status
 
         wo.save()
         return jsonify(wo.to_json()), 200
@@ -211,19 +230,19 @@ def update_work_order(wo_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- DELETE (Hapus) Work Order ---
+# --- DELETE Work Order ---
 @wo_bp.route('/workorders/<wo_id>', methods=['DELETE'])
 def delete_work_order(wo_id):
     try:
         wo = WorkOrder.objects.get(id=wo_id)
         wo.delete()
-        return jsonify({"message": f"Work Order '{wo.title}' berhasil dihapus."}), 200
+        return jsonify({"message": "Work Order dihapus."}), 200
     except DoesNotExist:
         return jsonify({"error": "Work Order tidak ditemukan"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- Rute Laporan dan Ekspor (tetap sama) ---
+# --- Reports (Export CSV/PDF) ---
 @wo_bp.route('/workorders/report/asset_stats', methods=['GET'])
 def get_asset_report_stats():
     try:
@@ -236,23 +255,15 @@ def get_asset_report_stats():
 def export_asset_report_csv():
     try:
         report_data = calculate_asset_report_data()
-        if not report_data:
-            return jsonify({"error": "Tidak ada data untuk diekspor"}), 404
+        if not report_data: return jsonify({"error": "No data"}), 404
         si = StringIO()
         cw = csv.writer(si)
-        header = ['Asset_ID', 'Asset_Name', 'Total_WO', 'WO_Open', 'WO_In_Progress', 'WO_Completed']
+        header = ['Asset_ID', 'Asset_Name', 'Total_WO', 'Open', 'Pending_Approval', 'Pending_Verify', 'Completed']
         cw.writerow(header)
         for row in report_data:
-            cw.writerow([
-                row['asset_id'],
-                row['asset_name'],
-                row['total_wo'],
-                row['open'],
-                row['in_progress'],
-                row['completed']
-            ])
+            cw.writerow([row['asset_id'], row['asset_name'], row['total_wo'], row['open'], row['pending_approval'], row['pending_verification'], row['completed']])
         response = make_response(si.getvalue())
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Kinerja_Aset.csv'
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan.csv'
         response.headers['Content-type'] = 'text/csv'
         return response
     except Exception as e:
@@ -262,41 +273,22 @@ def export_asset_report_csv():
 def export_asset_report_pdf():
     try:
         report_data = calculate_asset_report_data()
-        if not report_data:
-            return jsonify({"error": "Tidak ada data untuk diekspor"}), 404
+        if not report_data: return jsonify({"error": "No data"}), 404
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
         styles = getSampleStyleSheet()
-        story = []
-        story.append(Paragraph("Laporan Kinerja Work Order Per Aset", styles['Title']))
-        story.append(Paragraph(f"Tanggal: {datetime.date.today().strftime('%d %B %Y')}", styles['Normal']))
-        story.append(Paragraph("<br/>", styles['Normal']))
-        data = [['Nama Aset', 'Total WO', 'Open', 'In Progress', 'Completed']]
+        story = [Paragraph("Laporan Kinerja Aset", styles['Title'])]
+        data = [['Aset', 'Total', 'Open', 'Pending Appr', 'Pending Verif', 'Done']]
         for row in report_data:
-            data.append([
-                row['asset_name'],
-                row['total_wo'],
-                row['open'],
-                row['in_progress'],
-                row['completed']
-            ])
+            data.append([row['asset_name'], row['total_wo'], row['open'], row['pending_approval'], row['pending_verification'], row['completed']])
         table = Table(data)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F3F4F6')), 
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1F2937')), 
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'), 
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#E5E7EB')),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ]))
+        table.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.5, colors.black)]))
         story.append(table)
         doc.build(story)
         pdf_value = buffer.getvalue()
         buffer.close()
         response = make_response(pdf_value)
-        response.headers['Content-Disposition'] = 'attachment; filename=Laporan_Kinerja_Aset.pdf'
+        response.headers['Content-Disposition'] = 'attachment; filename=Laporan.pdf'
         response.headers['Content-type'] = 'application/pdf'
         return response
     except Exception as e:

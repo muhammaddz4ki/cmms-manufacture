@@ -1,7 +1,7 @@
 // src/pages/AssetForm.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Loader2, Box, Hash, MapPin, List, Save, Image as ImageIcon } from 'lucide-react';
+import { Plus, Loader2, Box, Hash, MapPin, List, Save, Image as ImageIcon, Activity } from 'lucide-react';
 import LoadingState from '../components/LoadingState.jsx'; 
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -12,10 +12,11 @@ const TEMPLATES_API = `${API_BASE_URL}/templates`;
 export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated, onClose }) {
   const isEditMode = !!initialData;
 
-  // State
+  // State Form
   const [name, setName] = useState(initialData?.name || "");
   const [machineId, setMachineId] = useState(initialData?.machine_id || "");
   const [location, setLocation] = useState(initialData?.location || "");
+  const [status, setStatus] = useState(initialData?.status || "running"); // Tambahkan State Status
   
   // State Gambar
   const [imagePreview, setImagePreview] = useState(initialData?.image || null);
@@ -96,7 +97,7 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
   };
 
   const resetForm = () => {
-    setName(""); setMachineId(""); setLocation(""); 
+    setName(""); setMachineId(""); setLocation(""); setStatus("running");
     setSelectedTemplateId(""); setSelectedComponentIds(new Set());
     setImagePreview(null); setImageBase64(null);
   };
@@ -111,7 +112,8 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
       name: name,
       machine_id: machineId,
       location: location,
-      image: imageBase64, // Kirim gambar
+      status: status, // Kirim Status ke API
+      image: imageBase64, 
       component_ids: Array.from(selectedComponentIds) 
     };
 
@@ -163,7 +165,8 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
       </div>
 
       {/* Input Aset Dasar */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Nama Mesin */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Nama Mesin *</label>
           <div className="relative">
@@ -172,6 +175,7 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
           </div>
         </div>
         
+        {/* ID Mesin */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">ID Mesin (Unik) *</label>
            <div className="relative">
@@ -180,11 +184,30 @@ export default function AssetForm({ onAssetCreated, initialData, onAssetUpdated,
           </div>
         </div>
         
+        {/* Lokasi */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Lokasi</label>
            <div className="relative">
              <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
              <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="Area Stamping" className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors"/>
+          </div>
+        </div>
+
+        {/* STATUS MESIN (FITUR BARU) */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Status Mesin</label>
+           <div className="relative">
+             <Activity size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${status === 'running' ? 'text-green-500' : 'text-red-500'}`}/>
+             <select 
+                value={status} 
+                onChange={e => setStatus(e.target.value)}
+                className={`w-full pl-9 pr-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 transition-colors appearance-none font-medium ${
+                    status === 'running' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'
+                }`}
+             >
+                 <option value="running">Running (Beroperasi)</option>
+                 <option value="down">Down (Rusak/Mati)</option>
+             </select>
           </div>
         </div>
       </div>
